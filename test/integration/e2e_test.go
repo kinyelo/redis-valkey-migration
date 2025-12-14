@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,9 +37,9 @@ func (suite *E2ETestSuite) SetupSuite() {
 	}
 
 	// Get Redis configuration from environment or use defaults
-	redisHost := getEnvOrDefault("REDIS_HOST", "localhost")
+	redisHost := getEnvOrDefault("REDIS_HOST", "127.0.0.1")
 	redisPort := getEnvOrDefault("REDIS_PORT", "16379")
-	valkeyHost := getEnvOrDefault("VALKEY_HOST", "localhost")
+	valkeyHost := getEnvOrDefault("VALKEY_HOST", "127.0.0.1")
 	valkeyPort := getEnvOrDefault("VALKEY_PORT", "16380")
 
 	suite.redisConfig = client.NewClientConfig(
@@ -226,8 +227,8 @@ func (suite *E2ETestSuite) TestMigrationWithErrors() {
 func (suite *E2ETestSuite) TestResumeMigration() {
 	ctx := context.Background()
 
-	// Create a moderate dataset
-	keyCount := 100
+	// Create a larger dataset to ensure migration takes longer
+	keyCount := 500
 	suite.populateLargeDataset(ctx, keyCount)
 
 	resumeFile := "test_resume.json"
@@ -235,7 +236,7 @@ func (suite *E2ETestSuite) TestResumeMigration() {
 
 	// First migration - simulate interruption by migrating only part
 	firstEngine := suite.createMigrationEngineWithConfig(&engine.EngineConfig{
-		BatchSize:            10,
+		BatchSize:            3, // Even smaller batch size to make migration slower
 		MaxConcurrency:       1,
 		VerifyAfterMigration: false,
 		ContinueOnError:      true,
@@ -249,7 +250,16 @@ func (suite *E2ETestSuite) TestResumeMigration() {
 		firstEngine.Shutdown()
 	}()
 
-	firstEngine.Migrate() // This will be interrupted
+	err := firstEngine.Migrate() // This will be interrupted
+	// We expect this to fail due to intentional shutdown (context canceled)
+	// This is not a test failure, it's the expected behavior for resume testing
+	if err == nil {
+		suite.T().Fatal("Expected migration to be interrupted by shutdown, but it completed successfully")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		suite.T().Fatalf("Expected error to contain 'context canceled', but got: %v", err)
+	}
+	suite.T().Logf("Expected migration interruption: %v", err)
 
 	// Check that some keys were migrated (but allow for the case where all keys were migrated quickly)
 	valkeyKeys, err := suite.valkeyClient.Keys(ctx, "*").Result()

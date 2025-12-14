@@ -21,7 +21,7 @@ type DockerTestSuite struct {
 
 // SetupSuite initializes the Docker test environment
 func (suite *DockerTestSuite) SetupSuite() {
-	suite.composeProject = "migration-test"
+	suite.composeProject = "migration-docker-test"
 
 	// Check if Docker and Docker Compose are available
 	suite.checkDockerAvailable()
@@ -175,18 +175,35 @@ func (suite *DockerTestSuite) checkDockerAvailable() {
 }
 
 func (suite *DockerTestSuite) startTestEnvironment() {
-	// Start Redis and Valkey containers using docker-compose.test.yml
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "up", "-d")
-	output, err := cmd.CombinedOutput()
-	require.NoError(suite.T(), err, "Failed to start test environment: %s", string(output))
+	// Clean up any existing containers first
+	suite.stopTestEnvironment()
+
+	// Check if the E2E test containers are already running (from Makefile)
+	// If they are, we'll skip starting our own and use those instead
+	checkCmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", "migration-e2e-test", "ps", "-q")
+	output, err := checkCmd.Output()
+	if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+		// E2E containers are running, use those
+		suite.composeProject = "migration-e2e-test"
+		suite.T().Log("Using existing E2E test containers")
+	} else {
+		// Start our own containers
+		cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "up", "-d")
+		output, err := cmd.CombinedOutput()
+		require.NoError(suite.T(), err, "Failed to start test environment: %s", string(output))
+		suite.T().Log("Started Docker test containers")
+	}
 
 	// Wait for services to be ready
 	suite.waitForServices()
 }
 
 func (suite *DockerTestSuite) stopTestEnvironment() {
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "down", "-v")
-	cmd.Run() // Don't fail if cleanup fails
+	// Only stop containers if we started them ourselves (not using E2E containers)
+	if suite.composeProject != "migration-e2e-test" {
+		cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "down", "-v")
+		cmd.Run() // Don't fail if cleanup fails
+	}
 }
 
 func (suite *DockerTestSuite) waitForServices() {
