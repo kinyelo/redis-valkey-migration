@@ -19,7 +19,7 @@ A robust Go-based command-line application that provides complete data migration
 
 ```bash
 # Download and install
-go install github.com/your-org/redis-valkey-migration@latest
+go install github.com/kinyelo/redis-valkey-migration@latest
 
 # Basic migration (dry run first)
 redis-valkey-migration migrate --dry-run
@@ -77,7 +77,7 @@ Download from releases for your platform:
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/redis-valkey-migration.git
+git clone https://github.com/kinyelo/redis-valkey-migration.git
 cd redis-valkey-migration
 
 # Set up development environment
