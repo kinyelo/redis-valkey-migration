@@ -21,7 +21,7 @@ go.work
 /build/
 /bin/
 /dist/
-redis-valkey-migration
+/redis-valkey-migration
 
 # IDE files
 .vscode/
