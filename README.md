@@ -41,7 +41,7 @@ A Go-based command-line application that provides complete data migration betwee
 ## Building
 
 ```bash
-go build -o bin/redis-valkey-migration ./cmd/redis-valkey-migration
+make build
 ```
 
 ## Usage
@@ -64,5 +64,5 @@ This project follows Go best practices with a clear separation of concerns:
 Run tests with:
 
 ```bash
-go test ./...
+make test
 ```
