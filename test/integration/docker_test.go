@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"redis-valkey-migration/internal/client"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -17,6 +19,8 @@ import (
 type DockerTestSuite struct {
 	suite.Suite
 	composeProject string
+	redisClient    client.DatabaseClient
+	valkeyClient   client.DatabaseClient
 }
 
 // SetupSuite initializes the Docker test environment
@@ -28,10 +32,21 @@ func (suite *DockerTestSuite) SetupSuite() {
 
 	// Start the test environment
 	suite.startTestEnvironment()
+
+	// Initialize Redis and Valkey clients
+	suite.initializeClients()
 }
 
 // TearDownSuite cleans up the Docker test environment
 func (suite *DockerTestSuite) TearDownSuite() {
+	// Disconnect clients
+	if suite.redisClient != nil {
+		suite.redisClient.Disconnect()
+	}
+	if suite.valkeyClient != nil {
+		suite.valkeyClient.Disconnect()
+	}
+
 	suite.stopTestEnvironment()
 }
 
@@ -232,39 +247,123 @@ func (suite *DockerTestSuite) waitForServices() {
 	}
 }
 
-func (suite *DockerTestSuite) clearDatabases() {
-	// Clear Redis
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "redis", "redis-cli", "FLUSHDB")
-	cmd.Run()
+func (suite *DockerTestSuite) initializeClients() {
+	// Create Redis client (connecting to localhost:16379)
+	redisConfig := client.NewClientConfig("localhost", 16379, "", 0)
+	suite.redisClient = client.NewRedisClient(redisConfig)
+	err := suite.redisClient.Connect()
+	require.NoError(suite.T(), err, "Failed to connect to Redis")
 
-	// Clear Valkey
-	cmd = exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "FLUSHDB")
-	cmd.Run()
+	// Create Valkey client (connecting to localhost:16380)
+	valkeyConfig := client.NewClientConfig("localhost", 16380, "", 0)
+	suite.valkeyClient = client.NewValkeyClient(valkeyConfig)
+	err = suite.valkeyClient.Connect()
+	require.NoError(suite.T(), err, "Failed to connect to Valkey")
+}
+
+func (suite *DockerTestSuite) clearDatabases() {
+	ctx, cancel := client.NewClientConfig("", 0, "", 0).Context()
+	defer cancel()
+
+	// Clear Redis using Go client
+	if suite.redisClient != nil {
+		if err := suite.redisClient.Ping(); err == nil {
+			// Get all keys and delete them (safer than FLUSHDB in case of shared instances)
+			keys, err := suite.redisClient.GetAllKeys()
+			if err == nil && len(keys) > 0 {
+				// Delete keys in batches to avoid blocking
+				for i := 0; i < len(keys); i += 100 {
+					end := i + 100
+					if end > len(keys) {
+						end = len(keys)
+					}
+					batch := keys[i:end]
+
+					// Use direct redis client for batch delete
+					redisOpts := &redis.Options{
+						Addr: "localhost:16379",
+						DB:   0,
+					}
+					directClient := redis.NewClient(redisOpts)
+					directClient.Del(ctx, batch...)
+					directClient.Close()
+				}
+			}
+		}
+	}
+
+	// Clear Valkey using Go client
+	if suite.valkeyClient != nil {
+		if err := suite.valkeyClient.Ping(); err == nil {
+			// Get all keys and delete them
+			keys, err := suite.valkeyClient.GetAllKeys()
+			if err == nil && len(keys) > 0 {
+				// Delete keys in batches
+				for i := 0; i < len(keys); i += 100 {
+					end := i + 100
+					if end > len(keys) {
+						end = len(keys)
+					}
+					batch := keys[i:end]
+
+					// Use direct redis client for batch delete (Valkey is Redis-compatible)
+					valkeyOpts := &redis.Options{
+						Addr: "localhost:16380",
+						DB:   0,
+					}
+					directClient := redis.NewClient(valkeyOpts)
+					directClient.Del(ctx, batch...)
+					directClient.Close()
+				}
+			}
+		}
+	}
 }
 
 func (suite *DockerTestSuite) populateRedisTestData() {
-	commands := [][]string{
-		{"SET", "test:string", "hello world"},
-		{"HSET", "test:hash", "field1", "value1", "field2", "value2"},
-		{"LPUSH", "test:list", "item1", "item2", "item3"},
-		{"SADD", "test:set", "member1", "member2", "member3"},
-		{"ZADD", "test:zset", "1", "member1", "2", "member2", "3", "member3"},
-	}
+	require.NotNil(suite.T(), suite.redisClient, "Redis client must be initialized")
 
-	for _, cmdArgs := range commands {
-		args := append([]string{"docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "redis", "redis-cli"}, cmdArgs...)
-		cmd := exec.Command(args[0], args[1:]...)
-		err := cmd.Run()
-		require.NoError(suite.T(), err, "Failed to populate Redis test data")
+	// Set string value
+	err := suite.redisClient.SetValue("test:string", "hello world")
+	require.NoError(suite.T(), err, "Failed to set string value")
+
+	// Set hash value
+	hashValue := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
 	}
+	err = suite.redisClient.SetValue("test:hash", hashValue)
+	require.NoError(suite.T(), err, "Failed to set hash value")
+
+	// Set list value (note: order is reversed due to LPUSH behavior)
+	listValue := []string{"item3", "item2", "item1"}
+	err = suite.redisClient.SetValue("test:list", listValue)
+	require.NoError(suite.T(), err, "Failed to set list value")
+
+	// Set set value
+	setValue := []interface{}{"member1", "member2", "member3"}
+	err = suite.redisClient.SetValue("test:set", setValue)
+	require.NoError(suite.T(), err, "Failed to set set value")
+
+	// Set sorted set value
+	zsetValue := []redis.Z{
+		{Score: 1, Member: "member1"},
+		{Score: 2, Member: "member2"},
+		{Score: 3, Member: "member3"},
+	}
+	err = suite.redisClient.SetValue("test:zset", zsetValue)
+	require.NoError(suite.T(), err, "Failed to set sorted set value")
 }
 
 func (suite *DockerTestSuite) populateLargeRedisDataset(keyCount int) {
+	require.NotNil(suite.T(), suite.redisClient, "Redis client must be initialized")
+
 	// Create keys one by one to ensure they're properly set
 	for i := range keyCount {
-		args := []string{"docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "redis", "redis-cli", "SET", fmt.Sprintf("large:key:%d", i), fmt.Sprintf("value_%d", i)}
-		cmd := exec.Command(args[0], args[1:]...)
-		err := cmd.Run()
+		key := fmt.Sprintf("large:key:%d", i)
+		value := fmt.Sprintf("value_%d", i)
+
+		err := suite.redisClient.SetValue(key, value)
 		require.NoError(suite.T(), err, "Failed to populate large Redis dataset")
 
 		// Log progress every 100 keys
@@ -314,59 +413,59 @@ func (suite *DockerTestSuite) runMigration(args []string) error {
 }
 
 func (suite *DockerTestSuite) getRedisKeys() []string {
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "redis", "redis-cli", "KEYS", "*")
-	output, err := cmd.Output()
+	require.NotNil(suite.T(), suite.redisClient, "Redis client must be initialized")
+
+	keys, err := suite.redisClient.GetAllKeys()
 	require.NoError(suite.T(), err, "Failed to get Redis keys")
 
-	keys := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(keys) == 1 && keys[0] == "" {
-		return []string{}
-	}
 	return keys
 }
 
 func (suite *DockerTestSuite) getValkeyKeys() []string {
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "KEYS", "*")
-	output, err := cmd.Output()
+	require.NotNil(suite.T(), suite.valkeyClient, "Valkey client must be initialized")
+
+	keys, err := suite.valkeyClient.GetAllKeys()
 	require.NoError(suite.T(), err, "Failed to get Valkey keys")
 
-	keys := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(keys) == 1 && keys[0] == "" {
-		return []string{}
-	}
 	return keys
 }
 
 func (suite *DockerTestSuite) verifyMigrationResults() {
+	require.NotNil(suite.T(), suite.valkeyClient, "Valkey client must be initialized")
+
 	// Verify string
-	cmd := exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "GET", "test:string")
-	output, err := cmd.Output()
+	value, err := suite.valkeyClient.GetValue("test:string")
 	require.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "hello world", strings.TrimSpace(string(output)))
+	assert.Equal(suite.T(), "hello world", value)
 
 	// Verify hash exists
-	cmd = exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "HGET", "test:hash", "field1")
-	output, err = cmd.Output()
+	hashValue, err := suite.valkeyClient.GetValue("test:hash")
 	require.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "value1", strings.TrimSpace(string(output)))
+	hashMap, ok := hashValue.(map[string]string)
+	require.True(suite.T(), ok, "Hash value should be map[string]string")
+	assert.Equal(suite.T(), "value1", hashMap["field1"])
+	assert.Equal(suite.T(), "value2", hashMap["field2"])
 
-	// Verify list length
-	cmd = exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "LLEN", "test:list")
-	output, err = cmd.Output()
+	// Verify list
+	listValue, err := suite.valkeyClient.GetValue("test:list")
 	require.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "3", strings.TrimSpace(string(output)))
+	listSlice, ok := listValue.([]string)
+	require.True(suite.T(), ok, "List value should be []string")
+	assert.Len(suite.T(), listSlice, 3)
 
-	// Verify set cardinality
-	cmd = exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "SCARD", "test:set")
-	output, err = cmd.Output()
+	// Verify set
+	setValue, err := suite.valkeyClient.GetValue("test:set")
 	require.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "3", strings.TrimSpace(string(output)))
+	setSlice, ok := setValue.([]string)
+	require.True(suite.T(), ok, "Set value should be []string")
+	assert.Len(suite.T(), setSlice, 3)
 
-	// Verify sorted set cardinality
-	cmd = exec.Command("docker", "compose", "-f", "../../docker-compose.test.yml", "-p", suite.composeProject, "exec", "-T", "valkey", "valkey-cli", "ZCARD", "test:zset")
-	output, err = cmd.Output()
+	// Verify sorted set
+	zsetValue, err := suite.valkeyClient.GetValue("test:zset")
 	require.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "3", strings.TrimSpace(string(output)))
+	zsetSlice, ok := zsetValue.([]redis.Z)
+	require.True(suite.T(), ok, "Sorted set value should be []redis.Z")
+	assert.Len(suite.T(), zsetSlice, 3)
 }
 
 func (suite *DockerTestSuite) getProjectRoot() string {
