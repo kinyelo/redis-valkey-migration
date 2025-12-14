@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // **Feature: redis-valkey-migration, Property 4: Data Integrity Verification**

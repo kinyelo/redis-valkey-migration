@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"redis-valkey-migration/internal/client"
-	"redis-valkey-migration/internal/engine"
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/internal/engine"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"

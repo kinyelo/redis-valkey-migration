@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/mock"
 
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // MockDatabaseClient is a mock implementation of DatabaseClient for testing

@@ -11,7 +11,7 @@ import (
 	"github.com/leanovate/gopter/prop"
 	"github.com/stretchr/testify/mock"
 
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // **Feature: redis-valkey-migration, Property 9: Connection Recovery and Resume**

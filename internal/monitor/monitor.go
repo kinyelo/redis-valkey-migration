@@ -2,10 +2,11 @@ package monitor
 
 import (
 	"fmt"
-	"redis-valkey-migration/pkg/logger"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // MigrationStatus represents the current state of migration

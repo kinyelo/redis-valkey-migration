@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"redis-valkey-migration/internal/client"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"

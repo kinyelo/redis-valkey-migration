@@ -2,9 +2,10 @@ package monitor
 
 import (
 	"errors"
-	"redis-valkey-migration/pkg/logger"
 	"testing"
 	"time"
+
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

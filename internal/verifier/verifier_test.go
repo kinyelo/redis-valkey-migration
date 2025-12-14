@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 func TestVerifyKey_SuccessfulVerification(t *testing.T) {

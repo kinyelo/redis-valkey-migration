@@ -6,11 +6,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"redis-valkey-migration/internal/client"
-	"redis-valkey-migration/internal/config"
-	"redis-valkey-migration/internal/engine"
-	"redis-valkey-migration/internal/version"
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/internal/config"
+	"github.com/kinyelo/redis-valkey-migration/internal/engine"
+	"github.com/kinyelo/redis-valkey-migration/internal/version"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 
 	"github.com/spf13/cobra"
 )

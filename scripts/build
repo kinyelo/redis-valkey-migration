@@ -88,9 +88,9 @@ build() {
     log_info "Building for current platform..."
     mkdir -p "$BUILD_DIR"
     
-    LDFLAGS="-X redis-valkey-migration/internal/version.Version=$VERSION \
-             -X redis-valkey-migration/internal/version.GitCommit=$GIT_COMMIT \
-             -X redis-valkey-migration/internal/version.BuildDate=$BUILD_DATE"
+    LDFLAGS="-X github.com/kinyelo/redis-valkey-migration/internal/version.Version=$VERSION \
+             -X github.com/kinyelo/redis-valkey-migration/internal/version.GitCommit=$GIT_COMMIT \
+             -X github.com/kinyelo/redis-valkey-migration/internal/version.BuildDate=$BUILD_DATE"
     
     go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/redis-valkey-migration" .
     
@@ -102,9 +102,9 @@ build_all() {
     log_info "Building for all platforms..."
     mkdir -p "$DIST_DIR"
     
-    LDFLAGS="-X redis-valkey-migration/internal/version.Version=$VERSION \
-             -X redis-valkey-migration/internal/version.GitCommit=$GIT_COMMIT \
-             -X redis-valkey-migration/internal/version.BuildDate=$BUILD_DATE"
+    LDFLAGS="-X github.com/kinyelo/redis-valkey-migration/internal/version.Version=$VERSION \
+             -X github.com/kinyelo/redis-valkey-migration/internal/version.GitCommit=$GIT_COMMIT \
+             -X github.com/kinyelo/redis-valkey-migration/internal/version.BuildDate=$BUILD_DATE"
     
     # Define platforms
     platforms=(

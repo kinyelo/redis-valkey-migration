@@ -2,8 +2,9 @@ package monitor
 
 import (
 	"errors"
-	"redis-valkey-migration/pkg/logger"
 	"testing"
+
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 
 	"github.com/leanovate/gopter"
 	"github.com/leanovate/gopter/gen"

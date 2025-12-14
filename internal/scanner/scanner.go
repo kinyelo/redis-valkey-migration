@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"redis-valkey-migration/internal/client"
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // KeyScanner defines the interface for key scanning operations

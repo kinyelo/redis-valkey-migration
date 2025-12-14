@@ -6,8 +6,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"redis-valkey-migration/internal/client"
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // VerificationResult represents the result of a verification operation

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // GracefulShutdownManager handles graceful shutdown of the migration process

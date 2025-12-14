@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"redis-valkey-migration/internal/client"
-	"redis-valkey-migration/internal/monitor"
-	"redis-valkey-migration/internal/processor"
-	"redis-valkey-migration/internal/scanner"
-	"redis-valkey-migration/internal/verifier"
-	"redis-valkey-migration/pkg/logger"
+	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/internal/monitor"
+	"github.com/kinyelo/redis-valkey-migration/internal/processor"
+	"github.com/kinyelo/redis-valkey-migration/internal/scanner"
+	"github.com/kinyelo/redis-valkey-migration/internal/verifier"
+	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
 // MigrationEngine orchestrates the entire migration process with error handling and recovery

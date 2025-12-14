@@ -1,4 +1,4 @@
-module redis-valkey-migration
+module github.com/kinyelo/redis-valkey-migration
 
 go 1.25.0
 

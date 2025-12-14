@@ -8,9 +8,9 @@ BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 GO_VERSION?=$(shell go version | cut -d' ' -f3)
 
 # Build flags
-LDFLAGS=-ldflags "-X redis-valkey-migration/internal/version.Version=$(VERSION) \
-                  -X redis-valkey-migration/internal/version.GitCommit=$(GIT_COMMIT) \
-                  -X redis-valkey-migration/internal/version.BuildDate=$(BUILD_DATE)"
+LDFLAGS=-ldflags "-X github.com/kinyelo/redis-valkey-migration/internal/version.Version=$(VERSION) \
+                  -X github.com/kinyelo/redis-valkey-migration/internal/version.GitCommit=$(GIT_COMMIT) \
+                  -X github.com/kinyelo/redis-valkey-migration/internal/version.BuildDate=$(BUILD_DATE)"
 
 # Directories
 BUILD_DIR=build
