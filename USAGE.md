@@ -1,0 +1,295 @@
+# Usage Guide
+
+This guide provides detailed instructions for using the Redis to Valkey Migration Tool.
+
+## Overview
+
+The Redis to Valkey Migration Tool is designed to safely and efficiently migrate all data from a Redis database to a Valkey database while maintaining data integrity and providing comprehensive monitoring.
+
+## Basic Usage
+
+### Command Structure
+
+```bash
+redis-valkey-migration [global-flags] <command> [command-flags]
+```
+
+### Global Flags
+
+- `--config, -c`: Configuration file path
+- `--verbose, -v`: Enable verbose output
+- `--dry-run`: Perform dry run without actual migration
+- `--help, -h`: Show help information
+
+## Commands
+
+### migrate
+
+Performs the actual data migration from Redis to Valkey.
+
+```bash
+redis-valkey-migration migrate [flags]
+```
+
+#### Connection Flags
+
+**Redis Connection:**
+- `--redis-host`: Redis server hostname (default: localhost)
+- `--redis-port`: Redis server port (default: 6379)
+- `--redis-password`: Redis authentication password
+- `--redis-database`: Redis database number (default: 0)
+
+**Valkey Connection:**
+- `--valkey-host`: Valkey server hostname (default: localhost)
+- `--valkey-port`: Valkey server port (default: 6380)
+- `--valkey-password`: Valkey authentication password
+- `--valkey-database`: Valkey database number (default: 0)
+
+#### Migration Behavior Flags
+
+- `--batch-size`: Keys per batch (default: 1000)
+- `--retry-attempts`: Retry attempts for failures (default: 3)
+- `--log-level`: Logging level (default: info)
+- `--verify`: Verify migration after completion (default: true)
+- `--continue-on-error`: Continue on individual key failures (default: true)
+- `--resume-file`: Resume state file (default: migration_resume.json)
+- `--progress-interval`: Progress reporting interval (default: 5s)
+- `--max-concurrency`: Maximum concurrent operations (default: 10)
+
+### version
+
+Display version and build information.
+
+```bash
+redis-valkey-migration version
+```
+
+## Usage Examples
+
+### Basic Migration
+
+Migrate from local Redis to local Valkey with default settings:
+
+```bash
+redis-valkey-migration migrate
+```
+
+### Custom Hosts and Ports
+
+Migrate between remote servers:
+
+```bash
+redis-valkey-migration migrate \
+  --redis-host redis.example.com \
+  --redis-port 6379 \
+  --valkey-host valkey.example.com \
+  --valkey-port 6380
+```
+
+### With Authentication
+
+Migrate with password authentication:
+
+```bash
+redis-valkey-migration migrate \
+  --redis-password "redis-secret-123" \
+  --valkey-password "valkey-secret-456"
+```
+
+### Different Databases
+
+Migrate from Redis DB 1 to Valkey DB 2:
+
+```bash
+redis-valkey-migration migrate \
+  --redis-database 1 \
+  --valkey-database 2
+```
+
+### Performance Tuning
+
+High-performance migration with custom settings:
+
+```bash
+redis-valkey-migration migrate \
+  --batch-size 2000 \
+  --max-concurrency 20 \
+  --progress-interval 10s \
+  --log-level warn
+```
+
+### Dry Run
+
+Preview what would be migrated without actual transfer:
+
+```bash
+redis-valkey-migration migrate --dry-run --verbose
+```
+
+### Resume Interrupted Migration
+
+Resume a previously interrupted migration:
+
+```bash
+redis-valkey-migration migrate \
+  --resume-file /path/to/previous/migration_resume.json
+```
+
+### Debug Mode
+
+Run with maximum logging for troubleshooting:
+
+```bash
+redis-valkey-migration migrate \
+  --log-level debug \
+  --verbose
+```
+
+## Migration Process
+
+### Phase 1: Connection and Discovery
+
+1. Validates configuration parameters
+2. Establishes connections to Redis and Valkey
+3. Discovers all keys in the Redis database
+4. Reports total number of keys to migrate
+
+### Phase 2: Data Transfer
+
+1. Processes keys in batches
+2. Identifies data type for each key
+3. Transfers data using appropriate commands
+4. Reports progress at regular intervals
+5. Handles errors with retry logic
+
+### Phase 3: Verification
+
+1. Verifies each transferred key exists in Valkey
+2. Compares data integrity between Redis and Valkey
+3. Reports any verification failures
+4. Generates final migration statistics
+
+## Data Types Supported
+
+The tool supports all standard Redis data types:
+
+- **Strings**: Simple key-value pairs
+- **Hashes**: Field-value mappings
+- **Lists**: Ordered collections of strings
+- **Sets**: Unordered collections of unique strings
+- **Sorted Sets**: Ordered sets with scores
+
+## Error Handling
+
+### Automatic Recovery
+
+- **Connection Loss**: Automatic reconnection with exponential backoff
+- **Network Errors**: Up to 3 retry attempts per operation
+- **Partial Failures**: Continue migration for remaining keys
+
+### Resume Capability
+
+If migration is interrupted:
+
+1. State is saved to resume file
+2. Restart with same resume file
+3. Tool skips already migrated keys
+4. Continues from last checkpoint
+
+### Error Reporting
+
+All errors are logged with:
+- Timestamp and severity level
+- Affected key name and operation
+- Detailed error message
+- Recovery actions taken
+
+## Monitoring and Logging
+
+### Progress Reporting
+
+Real-time progress includes:
+- Total keys discovered
+- Keys processed and remaining
+- Current processing rate
+- Estimated time to completion
+- Error count and failed keys
+
+### Log Files
+
+Detailed logs are written to `migration.log` with:
+- Structured JSON or text format
+- Configurable log levels
+- Automatic log rotation
+- Complete audit trail
+
+### Performance Metrics
+
+Final statistics include:
+- Total migration time
+- Keys per second throughput
+- Success and failure counts
+- Data volume transferred
+
+## Best Practices
+
+### Before Migration
+
+1. **Backup**: Create backups of both databases
+2. **Test**: Run dry-run to validate configuration
+3. **Resources**: Ensure adequate network and memory resources
+4. **Monitoring**: Set up monitoring for both databases
+
+### During Migration
+
+1. **Monitor**: Watch progress and error logs
+2. **Resources**: Monitor CPU, memory, and network usage
+3. **Databases**: Ensure both databases remain accessible
+4. **Interruption**: Use Ctrl+C for graceful shutdown if needed
+
+### After Migration
+
+1. **Verify**: Check final statistics and verification results
+2. **Test**: Validate application functionality with Valkey
+3. **Cleanup**: Remove temporary files and logs if desired
+4. **Monitor**: Monitor Valkey performance and stability
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Problems:**
+```bash
+# Test connectivity
+redis-cli -h redis-host -p 6379 ping
+valkey-cli -h valkey-host -p 6380 ping
+```
+
+**Authentication Issues:**
+```bash
+# Test with credentials
+redis-cli -h redis-host -p 6379 -a password ping
+```
+
+**Performance Issues:**
+- Reduce batch size for memory constraints
+- Increase concurrency for faster networks
+- Adjust progress interval for less logging overhead
+
+**Verification Failures:**
+- Check for data type mismatches
+- Verify TTL and expiration handling
+- Review error logs for specific failures
+
+### Getting Help
+
+```bash
+# Show general help
+redis-valkey-migration --help
+
+# Show command-specific help
+redis-valkey-migration migrate --help
+
+# Show version information
+redis-valkey-migration version
+```

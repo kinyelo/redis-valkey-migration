@@ -1,0 +1,82 @@
+# Integration Test Configuration
+
+# Test environment settings
+environment:
+  redis:
+    host: localhost
+    port: 16379
+    password: ""
+    database: 0
+  
+  valkey:
+    host: localhost
+    port: 16380
+    password: ""
+    database: 0
+
+# Test scenarios
+scenarios:
+  basic:
+    description: "Basic migration with all data types"
+    data:
+      strings: 10
+      hashes: 5
+      lists: 5
+      sets: 5
+      sorted_sets: 5
+    
+  large:
+    description: "Large dataset migration"
+    data:
+      strings: 1000
+      hashes: 100
+      lists: 100
+      sets: 100
+      sorted_sets: 100
+    
+  complex:
+    description: "Complex data structures"
+    data:
+      large_hashes: 10    # Hashes with 100+ fields
+      large_lists: 10     # Lists with 100+ elements
+      large_sets: 10      # Sets with 100+ members
+      large_zsets: 10     # Sorted sets with 100+ members
+
+# Migration settings for tests
+migration:
+  batch_sizes: [10, 50, 100, 500, 1000]
+  concurrency_levels: [1, 3, 5, 10]
+  retry_attempts: [1, 3, 5]
+  
+# Performance benchmarks
+performance:
+  small_dataset: 100     # keys
+  medium_dataset: 1000   # keys
+  large_dataset: 10000   # keys
+  
+  # Expected performance thresholds (keys per second)
+  min_throughput:
+    small: 50
+    medium: 100
+    large: 200
+
+# Error simulation
+error_scenarios:
+  - name: "connection_loss"
+    description: "Simulate connection loss during migration"
+    type: "network"
+  
+  - name: "memory_pressure"
+    description: "Test behavior under memory pressure"
+    type: "resource"
+  
+  - name: "partial_failure"
+    description: "Some keys fail to migrate"
+    type: "data"
+
+# Verification settings
+verification:
+  sample_size: 100       # Number of keys to verify in detail
+  check_ttl: true        # Verify TTL values
+  check_types: true      # Verify data types
+  check_content: true    # Verify content integrity
