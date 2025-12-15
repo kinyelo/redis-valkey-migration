@@ -12,6 +12,7 @@ A robust Go-based command-line application that provides complete data migration
 - **Resume Capability**: Resume interrupted migrations from checkpoints
 - **Graceful Shutdown**: Safe interruption with state preservation
 - **Flexible Configuration**: CLI flags, environment variables, and config files
+- **Configurable Timeouts**: Operation-specific timeouts with automatic scaling for large data
 - **Docker Support**: Containerized deployment with Docker Compose
 - **Comprehensive Testing**: Unit, property-based, and end-to-end tests
 
@@ -134,6 +135,17 @@ redis-valkey-migration migrate \
   --batch-size 2000 \
   --max-concurrency 20 \
   --progress-interval 10s
+```
+
+### Timeout Configuration
+
+```bash
+# Custom timeouts for large data or slow networks
+redis-valkey-migration migrate \
+  --connection-timeout 60s \
+  --hash-timeout 120s \
+  --large-data-threshold 5000 \
+  --large-data-multiplier 3.0
 ```
 
 ### Resume Interrupted Migration

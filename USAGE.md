@@ -56,6 +56,35 @@ redis-valkey-migration migrate [flags]
 - `--progress-interval`: Progress reporting interval (default: 5s)
 - `--max-concurrency`: Maximum concurrent operations (default: 10)
 
+#### Timeout Configuration Flags
+
+The tool provides configurable timeouts for different operations to handle large data structures and varying network conditions:
+
+**Connection Timeouts:**
+- `--connection-timeout`: Database connection timeout (default: 30s)
+
+**Operation-Specific Timeouts:**
+- `--string-timeout`: Timeout for string operations (default: 10s)
+- `--hash-timeout`: Timeout for hash operations (default: 30s)
+- `--list-timeout`: Timeout for list operations (default: 30s)
+- `--set-timeout`: Timeout for set operations (default: 30s)
+- `--sorted-set-timeout`: Timeout for sorted set operations (default: 30s)
+
+**Large Data Handling:**
+- `--large-data-threshold`: Size threshold for large data detection (default: 1000 elements/fields)
+- `--large-data-multiplier`: Timeout multiplier for large data (default: 3.0)
+
+**Environment Variables:**
+All timeout flags can also be set using environment variables:
+- `REDIS_VALKEY_CONNECTION_TIMEOUT`
+- `REDIS_VALKEY_STRING_TIMEOUT`
+- `REDIS_VALKEY_HASH_TIMEOUT`
+- `REDIS_VALKEY_LIST_TIMEOUT`
+- `REDIS_VALKEY_SET_TIMEOUT`
+- `REDIS_VALKEY_SORTED_SET_TIMEOUT`
+- `REDIS_VALKEY_LARGE_DATA_THRESHOLD`
+- `REDIS_VALKEY_LARGE_DATA_MULTIPLIER`
+
 ### version
 
 Display version and build information.
@@ -145,6 +174,54 @@ redis-valkey-migration migrate \
   --verbose
 ```
 
+### Timeout Configuration
+
+#### Default Timeout Settings
+
+For most use cases, the default timeout settings work well:
+
+```bash
+redis-valkey-migration migrate
+```
+
+#### Custom Timeout Settings
+
+For databases with large data structures or slow networks:
+
+```bash
+redis-valkey-migration migrate \
+  --connection-timeout 60s \
+  --hash-timeout 120s \
+  --list-timeout 90s \
+  --large-data-threshold 5000 \
+  --large-data-multiplier 5.0
+```
+
+#### High-Performance Networks
+
+For fast, reliable networks with smaller data:
+
+```bash
+redis-valkey-migration migrate \
+  --connection-timeout 10s \
+  --string-timeout 5s \
+  --hash-timeout 15s \
+  --list-timeout 15s \
+  --set-timeout 15s \
+  --sorted-set-timeout 15s
+```
+
+#### Using Environment Variables
+
+Set timeouts via environment variables:
+
+```bash
+export REDIS_VALKEY_CONNECTION_TIMEOUT=45s
+export REDIS_VALKEY_HASH_TIMEOUT=60s
+export REDIS_VALKEY_LARGE_DATA_THRESHOLD=2000
+redis-valkey-migration migrate
+```
+
 ## Migration Process
 
 ### Phase 1: Connection and Discovery
@@ -158,9 +235,11 @@ redis-valkey-migration migrate \
 
 1. Processes keys in batches
 2. Identifies data type for each key
-3. Transfers data using appropriate commands
-4. Reports progress at regular intervals
-5. Handles errors with retry logic
+3. Applies appropriate timeout based on data type and size
+4. Transfers data using appropriate commands
+5. Automatically scales timeouts for large data structures
+6. Reports progress at regular intervals
+7. Handles errors with retry logic
 
 ### Phase 3: Verification
 
@@ -185,6 +264,7 @@ The tool supports all standard Redis data types:
 
 - **Connection Loss**: Automatic reconnection with exponential backoff
 - **Network Errors**: Up to 3 retry attempts per operation
+- **Timeout Errors**: Automatic timeout scaling for large data structures
 - **Partial Failures**: Continue migration for remaining keys
 
 ### Resume Capability
@@ -275,6 +355,12 @@ redis-cli -h redis-host -p 6379 -a password ping
 - Reduce batch size for memory constraints
 - Increase concurrency for faster networks
 - Adjust progress interval for less logging overhead
+
+**Timeout Issues:**
+- Increase operation timeouts for slow networks or large data
+- Adjust large data threshold and multiplier for your data patterns
+- Monitor logs for timeout scaling messages
+- Use environment variables for persistent timeout configuration
 
 **Verification Failures:**
 - Check for data type mismatches

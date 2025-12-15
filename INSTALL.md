@@ -94,6 +94,19 @@ redis-valkey-migration migrate \
   --log-level debug
 ```
 
+### With Timeout Configuration
+
+For databases with large data structures or slow networks:
+
+```bash
+redis-valkey-migration migrate \
+  --connection-timeout 60s \
+  --hash-timeout 120s \
+  --list-timeout 90s \
+  --large-data-threshold 5000 \
+  --large-data-multiplier 5.0
+```
+
 ### Using Docker Compose
 
 1. Start Redis and Valkey services:
@@ -125,6 +138,16 @@ export VALKEY_PORT=6380
 export VALKEY_PASSWORD=secret
 export VALKEY_DATABASE=0
 export LOG_LEVEL=info
+
+# Timeout Configuration
+export REDIS_VALKEY_CONNECTION_TIMEOUT=30s
+export REDIS_VALKEY_STRING_TIMEOUT=10s
+export REDIS_VALKEY_HASH_TIMEOUT=30s
+export REDIS_VALKEY_LIST_TIMEOUT=30s
+export REDIS_VALKEY_SET_TIMEOUT=30s
+export REDIS_VALKEY_SORTED_SET_TIMEOUT=30s
+export REDIS_VALKEY_LARGE_DATA_THRESHOLD=1000
+export REDIS_VALKEY_LARGE_DATA_MULTIPLIER=3.0
 ```
 
 ### Configuration File
@@ -148,6 +171,16 @@ migration:
   batch_size: 1000
   retry_attempts: 3
   log_level: info
+
+timeouts:
+  connection: 30s
+  string: 10s
+  hash: 30s
+  list: 30s
+  set: 30s
+  sorted_set: 30s
+  large_data_threshold: 1000
+  large_data_multiplier: 3.0
 ```
 
 ## Verification
