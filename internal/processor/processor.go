@@ -7,6 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/kinyelo/redis-valkey-migration/internal/client"
+	"github.com/kinyelo/redis-valkey-migration/internal/config"
 	"github.com/kinyelo/redis-valkey-migration/pkg/logger"
 )
 
@@ -33,13 +34,22 @@ type DataProcessor interface {
 
 // migrationProcessor implements DataProcessor interface
 type migrationProcessor struct {
-	logger logger.Logger
+	logger        logger.Logger
+	timeoutConfig *config.TimeoutConfig
 }
 
 // NewDataProcessor creates a new DataProcessor instance
 func NewDataProcessor(logger logger.Logger) DataProcessor {
 	return &migrationProcessor{
 		logger: logger,
+	}
+}
+
+// NewDataProcessorWithTimeout creates a new DataProcessor instance with timeout configuration
+func NewDataProcessorWithTimeout(logger logger.Logger, timeoutConfig *config.TimeoutConfig) DataProcessor {
+	return &migrationProcessor{
+		logger:        logger,
+		timeoutConfig: timeoutConfig,
 	}
 }
 
@@ -58,6 +68,14 @@ func (p *migrationProcessor) ProcessKey(key, keyType string, source, target clie
 		return p.ProcessSortedSet(key, source, target)
 	default:
 		return fmt.Errorf("unsupported key type: %s", keyType)
+	}
+}
+
+// logLargeDataDetection logs when large data is detected and timeout adjustments are made
+func (p *migrationProcessor) logLargeDataDetection(key, keyType string, dataSize int64) {
+	if p.timeoutConfig != nil && dataSize > p.timeoutConfig.LargeDataThreshold {
+		p.logger.Infof("Large data detected for key %s (type: %s, size: %d elements). Extended timeout will be applied (multiplier: %.1fx)",
+			key, keyType, dataSize, p.timeoutConfig.LargeDataMultiplier)
 	}
 }
 
@@ -80,6 +98,9 @@ func (p *migrationProcessor) ProcessString(key string, source, target client.Dat
 		p.logger.LogKeyTransfer(key, "string", 0, false, duration, errMsg)
 		return fmt.Errorf("expected string value for key %s, got %T", key, value)
 	}
+
+	// Log large data detection for strings (based on byte length)
+	p.logLargeDataDetection(key, "string", int64(len(stringValue)))
 
 	// Get TTL from source
 	ttl, err := source.GetTTL(key)
@@ -127,11 +148,11 @@ func (p *migrationProcessor) ProcessHash(key string, source, target client.Datab
 		return fmt.Errorf("expected map[string]string value for key %s, got %T", key, value)
 	}
 
-	// Calculate size (sum of key and value lengths)
-	var size int64
-	for k, v := range hashValue {
-		size += int64(len(k) + len(v))
-	}
+	// Calculate size (number of fields for hash)
+	size := int64(len(hashValue))
+
+	// Log large data detection
+	p.logLargeDataDetection(key, "hash", size)
 
 	// Get TTL from source
 	ttl, err := source.GetTTL(key)
@@ -179,11 +200,11 @@ func (p *migrationProcessor) ProcessList(key string, source, target client.Datab
 		return fmt.Errorf("expected []string value for key %s, got %T", key, value)
 	}
 
-	// Calculate size (sum of all element lengths)
-	var size int64
-	for _, item := range listValue {
-		size += int64(len(item))
-	}
+	// Calculate size (number of elements for list)
+	size := int64(len(listValue))
+
+	// Log large data detection
+	p.logLargeDataDetection(key, "list", size)
 
 	// Get TTL from source
 	ttl, err := source.GetTTL(key)
@@ -231,11 +252,11 @@ func (p *migrationProcessor) ProcessSet(key string, source, target client.Databa
 		return fmt.Errorf("expected []string value for key %s, got %T", key, value)
 	}
 
-	// Calculate size (sum of all member lengths)
-	var size int64
-	for _, member := range setValue {
-		size += int64(len(member))
-	}
+	// Calculate size (number of members for set)
+	size := int64(len(setValue))
+
+	// Log large data detection
+	p.logLargeDataDetection(key, "set", size)
 
 	// Convert to []interface{} for SetValue
 	interfaceSlice := make([]interface{}, len(setValue))
@@ -289,13 +310,11 @@ func (p *migrationProcessor) ProcessSortedSet(key string, source, target client.
 		return fmt.Errorf("expected []redis.Z value for key %s, got %T", key, value)
 	}
 
-	// Calculate size (sum of all member lengths)
-	var size int64
-	for _, z := range zsetValue {
-		if member, ok := z.Member.(string); ok {
-			size += int64(len(member))
-		}
-	}
+	// Calculate size (number of members for sorted set)
+	size := int64(len(zsetValue))
+
+	// Log large data detection
+	p.logLargeDataDetection(key, "zset", size)
 
 	// Get TTL from source
 	ttl, err := source.GetTTL(key)

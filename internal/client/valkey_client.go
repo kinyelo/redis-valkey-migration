@@ -29,7 +29,7 @@ func (v *ValkeyClient) Connect() error {
 		DB:       v.config.Database,
 	})
 
-	ctx, cancel := v.config.Context()
+	ctx, cancel := v.config.ConnectionContext()
 	defer cancel()
 
 	// Test the connection
@@ -54,7 +54,8 @@ func (v *ValkeyClient) GetAllKeys() ([]string, error) {
 		return nil, fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	// Use default operation timeout for scanning
+	ctx, cancel := v.config.OperationContext("scan", 0)
 	defer cancel()
 
 	var keys []string
@@ -77,7 +78,8 @@ func (v *ValkeyClient) GetKeyType(key string) (string, error) {
 		return "", fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	// Use default operation timeout for type checking
+	ctx, cancel := v.config.OperationContext("type", 0)
 	defer cancel()
 
 	keyType, err := v.client.Type(ctx, key).Result()
@@ -99,7 +101,14 @@ func (v *ValkeyClient) GetValue(key string) (interface{}, error) {
 		return nil, err
 	}
 
-	ctx, cancel := v.config.Context()
+	// Estimate data size for timeout calculation
+	dataSize, err := v.estimateDataSize(key, keyType)
+	if err != nil {
+		// If we can't estimate size, use 0 (will use base timeout)
+		dataSize = 0
+	}
+
+	ctx, cancel := v.config.OperationContext(keyType, dataSize)
 	defer cancel()
 
 	switch keyType {
@@ -118,21 +127,66 @@ func (v *ValkeyClient) GetValue(key string) (interface{}, error) {
 	}
 }
 
+// estimateDataSize estimates the size of data for a key to determine appropriate timeout
+func (v *ValkeyClient) estimateDataSize(key, keyType string) (int64, error) {
+	ctx, cancel := v.config.OperationContext("size", 0)
+	defer cancel()
+
+	switch keyType {
+	case "string":
+		// For strings, get the length
+		length, err := v.client.StrLen(ctx, key).Result()
+		return length, err
+	case "hash":
+		// For hashes, get the number of fields
+		length, err := v.client.HLen(ctx, key).Result()
+		return length, err
+	case "list":
+		// For lists, get the length
+		length, err := v.client.LLen(ctx, key).Result()
+		return length, err
+	case "set":
+		// For sets, get the cardinality
+		length, err := v.client.SCard(ctx, key).Result()
+		return length, err
+	case "zset":
+		// For sorted sets, get the cardinality
+		length, err := v.client.ZCard(ctx, key).Result()
+		return length, err
+	default:
+		return 0, nil
+	}
+}
+
 // SetValue stores a value for a key, handling all Valkey data types
 func (v *ValkeyClient) SetValue(key string, value interface{}) error {
 	if v.client == nil {
 		return fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
-	defer cancel()
+	// Determine data type and size for timeout calculation
+	var dataType string
+	var dataSize int64
 
 	switch val := value.(type) {
 	case string:
+		dataType = "string"
+		dataSize = int64(len(val))
+		ctx, cancel := v.config.OperationContext(dataType, dataSize)
+		defer cancel()
 		return v.client.Set(ctx, key, val, 0).Err()
 	case map[string]string:
+		dataType = "hash"
+		dataSize = int64(len(val))
+		ctx, cancel := v.config.OperationContext(dataType, dataSize)
+		defer cancel()
 		return v.client.HMSet(ctx, key, val).Err()
 	case []string:
+		dataType = "list"
+		dataSize = int64(len(val))
+		ctx, cancel := v.config.OperationContext(dataType, dataSize)
+		defer cancel()
+
 		// Clear existing list first
 		pipe := v.client.Pipeline()
 		pipe.Del(ctx, key)
@@ -151,6 +205,11 @@ func (v *ValkeyClient) SetValue(key string, value interface{}) error {
 		_, err := pipe.Exec(ctx)
 		return err
 	case []interface{}:
+		dataType = "set"
+		dataSize = int64(len(val))
+		ctx, cancel := v.config.OperationContext(dataType, dataSize)
+		defer cancel()
+
 		// For sets - clear existing set first
 		pipe := v.client.Pipeline()
 		pipe.Del(ctx, key)
@@ -166,6 +225,11 @@ func (v *ValkeyClient) SetValue(key string, value interface{}) error {
 		_, err := pipe.Exec(ctx)
 		return err
 	case []redis.Z:
+		dataType = "zset"
+		dataSize = int64(len(val))
+		ctx, cancel := v.config.OperationContext(dataType, dataSize)
+		defer cancel()
+
 		// For sorted sets - clear existing sorted set first
 		pipe := v.client.Pipeline()
 		pipe.Del(ctx, key)
@@ -191,7 +255,7 @@ func (v *ValkeyClient) Exists(key string) (bool, error) {
 		return false, fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	ctx, cancel := v.config.OperationContext("exists", 0)
 	defer cancel()
 
 	count, err := v.client.Exists(ctx, key).Result()
@@ -208,7 +272,7 @@ func (v *ValkeyClient) Ping() error {
 		return fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	ctx, cancel := v.config.ConnectionContext()
 	defer cancel()
 
 	return v.client.Ping(ctx).Err()
@@ -220,7 +284,7 @@ func (v *ValkeyClient) GetTTL(key string) (time.Duration, error) {
 		return 0, fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	ctx, cancel := v.config.OperationContext("ttl", 0)
 	defer cancel()
 
 	ttl, err := v.client.TTL(ctx, key).Result()
@@ -237,7 +301,7 @@ func (v *ValkeyClient) SetTTL(key string, ttl time.Duration) error {
 		return fmt.Errorf("Valkey client not connected")
 	}
 
-	ctx, cancel := v.config.Context()
+	ctx, cancel := v.config.OperationContext("ttl", 0)
 	defer cancel()
 
 	return v.client.Expire(ctx, key, ttl).Err()

@@ -42,16 +42,32 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-    Host     string
-    Port     int
-    Password string
-    Database int
+    Host               string
+    Port               int
+    Password           string
+    Database           int
+    ConnectionTimeout  time.Duration
+    OperationTimeout   time.Duration
+    LargeDataTimeout   time.Duration
 }
 
 type MigrationConfig struct {
-    BatchSize    int
-    RetryAttempts int
-    LogLevel     string
+    BatchSize         int
+    RetryAttempts     int
+    LogLevel          string
+    TimeoutConfig     TimeoutConfig
+}
+
+type TimeoutConfig struct {
+    ConnectionTimeout    time.Duration
+    DefaultOperation     time.Duration
+    StringOperation      time.Duration
+    HashOperation        time.Duration
+    ListOperation        time.Duration
+    SetOperation         time.Duration
+    SortedSetOperation   time.Duration
+    LargeDataThreshold   int64
+    LargeDataMultiplier  float64
 }
 ```
 
@@ -195,6 +211,18 @@ type KeyMetadata struct {
 ### Property 12: Verification Failure Reporting
 *For any* data verification failure, the Migration Tool should report the specific key name and detailed nature of the mismatch between Redis and Valkey
 **Validates: Requirements 4.3**
+
+### Property 13: Timeout Configuration Validation
+*For any* timeout configuration values provided, the Migration Tool should validate that all timeout values are positive and within reasonable ranges, reporting specific errors for invalid configurations
+**Validates: Requirements 8.5**
+
+### Property 14: Operation-Specific Timeout Application
+*For any* data operation (connection, string, hash, list, set, sorted set), the Migration Tool should apply the appropriate configured timeout value based on the operation type and data size
+**Validates: Requirements 8.1, 8.2, 8.4**
+
+### Property 15: Large Data Timeout Scaling
+*For any* data structure exceeding the large data threshold, the Migration Tool should automatically apply extended timeout values using the configured multiplier to prevent timeout errors
+**Validates: Requirements 8.4**
 
 ## Error Handling
 

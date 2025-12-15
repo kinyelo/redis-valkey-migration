@@ -15,16 +15,21 @@ func TestNewClientConfig(t *testing.T) {
 	assert.Equal(t, 6379, config.Port)
 	assert.Equal(t, "password", config.Password)
 	assert.Equal(t, 0, config.Database)
-	assert.Equal(t, DefaultTimeout, config.Timeout)
+	assert.Equal(t, DefaultTimeout, config.ConnectionTimeout)
+	assert.Equal(t, 10*time.Second, config.OperationTimeout)
+	assert.Equal(t, 60*time.Second, config.LargeDataTimeout)
+	assert.NotNil(t, config.TimeoutConfig)
 }
 
 func TestClientConfig_Context(t *testing.T) {
 	config := &ClientConfig{
-		Host:     "localhost",
-		Port:     6379,
-		Password: "",
-		Database: 0,
-		Timeout:  5 * time.Second,
+		Host:              "localhost",
+		Port:              6379,
+		Password:          "",
+		Database:          0,
+		OperationTimeout:  5 * time.Second,
+		ConnectionTimeout: 30 * time.Second,
+		LargeDataTimeout:  60 * time.Second,
 	}
 
 	ctx, cancel := config.Context()
@@ -79,7 +84,7 @@ func TestValkeyClient_Disconnect_WithoutConnect(t *testing.T) {
 // Note: These tests verify the connection logic without requiring actual Redis/Valkey instances
 func TestRedisClient_Connect_InvalidHost(t *testing.T) {
 	config := NewClientConfig("invalid-host-that-does-not-exist", 6379, "", 0)
-	config.Timeout = 1 * time.Second // Short timeout for faster test
+	config.ConnectionTimeout = 1 * time.Second // Short timeout for faster test
 	client := NewRedisClient(config)
 
 	err := client.Connect()
@@ -89,7 +94,7 @@ func TestRedisClient_Connect_InvalidHost(t *testing.T) {
 
 func TestValkeyClient_Connect_InvalidHost(t *testing.T) {
 	config := NewClientConfig("invalid-host-that-does-not-exist", 6380, "", 0)
-	config.Timeout = 1 * time.Second // Short timeout for faster test
+	config.ConnectionTimeout = 1 * time.Second // Short timeout for faster test
 	client := NewValkeyClient(config)
 
 	err := client.Connect()
@@ -99,7 +104,7 @@ func TestValkeyClient_Connect_InvalidHost(t *testing.T) {
 
 func TestRedisClient_Connect_InvalidPort(t *testing.T) {
 	config := NewClientConfig("localhost", 99999, "", 0) // Invalid port
-	config.Timeout = 1 * time.Second                     // Short timeout for faster test
+	config.ConnectionTimeout = 1 * time.Second           // Short timeout for faster test
 	client := NewRedisClient(config)
 
 	err := client.Connect()
@@ -109,7 +114,7 @@ func TestRedisClient_Connect_InvalidPort(t *testing.T) {
 
 func TestValkeyClient_Connect_InvalidPort(t *testing.T) {
 	config := NewClientConfig("localhost", 99999, "", 0) // Invalid port
-	config.Timeout = 1 * time.Second                     // Short timeout for faster test
+	config.ConnectionTimeout = 1 * time.Second           // Short timeout for faster test
 	client := NewValkeyClient(config)
 
 	err := client.Connect()
@@ -218,11 +223,13 @@ func TestClientConfig_ValidConfiguration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &ClientConfig{
-				Host:     tc.host,
-				Port:     tc.port,
-				Password: tc.password,
-				Database: tc.database,
-				Timeout:  DefaultTimeout,
+				Host:              tc.host,
+				Port:              tc.port,
+				Password:          tc.password,
+				Database:          tc.database,
+				ConnectionTimeout: DefaultTimeout,
+				OperationTimeout:  10 * time.Second,
+				LargeDataTimeout:  60 * time.Second,
 			}
 
 			// Test that clients can be created (they don't validate config at creation time)

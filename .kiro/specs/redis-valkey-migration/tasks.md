@@ -213,18 +213,61 @@
     - Add conditional logic to detect if Docker is available before running e2e tests
     - Ensure e2e tests run after unit and property tests
     - Add cleanup logic to ensure containers are stopped even if tests fail
-    - _Requirements: 8.1, 8.5_
+    - _Requirements: 9.1, 9.5_
 
   - [x] 14.2 Create streamlined e2e test execution
     - Optimize container startup time for faster test execution
     - Add test data seeding directly in the test setup
     - Ensure e2e tests can run independently or as part of the full test suite
     - Add environment variable configuration for CI/CD compatibility
-    - _Requirements: 8.1, 8.5_
+    - _Requirements: 9.1, 9.5_
 
   - [x] 14.3 Add test result reporting and cleanup
     - Ensure proper cleanup of test containers and volumes
     - Add test result aggregation across unit, property, and e2e tests
     - Create unified test reporting for all test types
     - Add failure handling to prevent hanging containers
-    - _Requirements: 8.1, 8.5_
+    - _Requirements: 9.1, 9.5_
+
+- [x] 15. Implement configurable timeout system for large data structures
+  - [x] 15.1 Extend configuration system with timeout settings
+    - Add TimeoutConfig struct with operation-specific timeout values
+    - Update DatabaseConfig to include connection and operation timeouts
+    - Add CLI flags for timeout configuration (--connection-timeout, --hash-timeout, etc.)
+    - Add environment variable support for timeout settings
+    - _Requirements: 8.1, 8.3_
+
+  - [x] 15.2 Write property test for timeout configuration validation
+    - **Property 13: Timeout Configuration Validation**
+    - **Validates: Requirements 8.5**
+
+  - [x] 15.3 Update client implementations with configurable timeouts
+    - Modify RedisClient and ValkeyClient to use configurable timeouts
+    - Implement operation-specific timeout selection based on data type
+    - Add large data detection and automatic timeout scaling
+    - Update context creation to use appropriate timeout values
+    - _Requirements: 8.1, 8.2, 8.4_
+
+  - [x] 15.4 Write property test for operation-specific timeouts
+    - **Property 14: Operation-Specific Timeout Application**
+    - **Validates: Requirements 8.1, 8.2, 8.4**
+
+  - [x] 15.5 Write property test for large data timeout scaling
+    - **Property 15: Large Data Timeout Scaling**
+    - **Validates: Requirements 8.4**
+
+  - [x] 15.6 Update data processors to handle large data timeouts
+    - Modify ProcessHash, ProcessList, ProcessSet methods to detect large data
+    - Implement automatic timeout extension for operations exceeding threshold
+    - Add logging for timeout adjustments and large data handling
+    - _Requirements: 8.2, 8.4_
+
+  - [x] 15.7 Write unit tests for timeout functionality
+    - Test timeout configuration loading and validation
+    - Test operation-specific timeout selection
+    - Test large data detection and timeout scaling
+    - Test timeout error handling and reporting
+    - _Requirements: 8.1, 8.2, 8.4, 8.5_
+
+- [x] 16. Final checkpoint - Ensure timeout implementation works
+  - Ensure all tests pass, ask the user if questions arise.

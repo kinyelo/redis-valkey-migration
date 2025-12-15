@@ -3,56 +3,61 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateConfig_ValidConfiguration(t *testing.T) {
-	config := &Config{
+// createValidConfig creates a valid configuration for testing
+func createValidConfig() *Config {
+	return &Config{
 		Redis: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6379,
-			Password: "test-password",
-			Database: 0,
+			Host:              "localhost",
+			Port:              6379,
+			Password:          "test-password",
+			Database:          0,
+			ConnectionTimeout: 30 * time.Second,
+			OperationTimeout:  10 * time.Second,
+			LargeDataTimeout:  60 * time.Second,
 		},
 		Valkey: DatabaseConfig{
-			Host:     "valkey-host",
-			Port:     6380,
-			Password: "valkey-password",
-			Database: 1,
+			Host:              "valkey-host",
+			Port:              6380,
+			Password:          "valkey-password",
+			Database:          1,
+			ConnectionTimeout: 30 * time.Second,
+			OperationTimeout:  10 * time.Second,
+			LargeDataTimeout:  60 * time.Second,
 		},
 		Migration: MigrationConfig{
 			BatchSize:     1000,
 			RetryAttempts: 3,
 			LogLevel:      "info",
+			TimeoutConfig: TimeoutConfig{
+				ConnectionTimeout:   30 * time.Second,
+				DefaultOperation:    10 * time.Second,
+				StringOperation:     5 * time.Second,
+				HashOperation:       15 * time.Second,
+				ListOperation:       15 * time.Second,
+				SetOperation:        15 * time.Second,
+				SortedSetOperation:  20 * time.Second,
+				LargeDataThreshold:  10000,
+				LargeDataMultiplier: 2.0,
+			},
 		},
 	}
+}
 
+func TestValidateConfig_ValidConfiguration(t *testing.T) {
+	config := createValidConfig()
 	err := ValidateConfig(config)
 	assert.NoError(t, err)
 }
 
 func TestValidateConfig_InvalidRedisHost(t *testing.T) {
-	config := &Config{
-		Redis: DatabaseConfig{
-			Host:     "", // Invalid empty host
-			Port:     6379,
-			Password: "",
-			Database: 0,
-		},
-		Valkey: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6380,
-			Password: "",
-			Database: 0,
-		},
-		Migration: MigrationConfig{
-			BatchSize:     1000,
-			RetryAttempts: 3,
-			LogLevel:      "info",
-		},
-	}
+	config := createValidConfig()
+	config.Redis.Host = "" // Invalid empty host
 
 	err := ValidateConfig(config)
 	assert.Error(t, err)
@@ -71,25 +76,8 @@ func TestValidateConfig_InvalidPort(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{
-				Redis: DatabaseConfig{
-					Host:     "localhost",
-					Port:     tc.port,
-					Password: "",
-					Database: 0,
-				},
-				Valkey: DatabaseConfig{
-					Host:     "localhost",
-					Port:     6380,
-					Password: "",
-					Database: 0,
-				},
-				Migration: MigrationConfig{
-					BatchSize:     1000,
-					RetryAttempts: 3,
-					LogLevel:      "info",
-				},
-			}
+			config := createValidConfig()
+			config.Redis.Port = tc.port
 
 			err := ValidateConfig(config)
 			assert.Error(t, err)
@@ -109,25 +97,8 @@ func TestValidateConfig_InvalidDatabase(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{
-				Redis: DatabaseConfig{
-					Host:     "localhost",
-					Port:     6379,
-					Password: "",
-					Database: tc.database,
-				},
-				Valkey: DatabaseConfig{
-					Host:     "localhost",
-					Port:     6380,
-					Password: "",
-					Database: 0,
-				},
-				Migration: MigrationConfig{
-					BatchSize:     1000,
-					RetryAttempts: 3,
-					LogLevel:      "info",
-				},
-			}
+			config := createValidConfig()
+			config.Redis.Database = tc.database
 
 			err := ValidateConfig(config)
 			assert.Error(t, err)
@@ -137,25 +108,8 @@ func TestValidateConfig_InvalidDatabase(t *testing.T) {
 }
 
 func TestValidateConfig_InvalidBatchSize(t *testing.T) {
-	config := &Config{
-		Redis: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6379,
-			Password: "",
-			Database: 0,
-		},
-		Valkey: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6380,
-			Password: "",
-			Database: 0,
-		},
-		Migration: MigrationConfig{
-			BatchSize:     0, // Invalid batch size
-			RetryAttempts: 3,
-			LogLevel:      "info",
-		},
-	}
+	config := createValidConfig()
+	config.Migration.BatchSize = 0 // Invalid batch size
 
 	err := ValidateConfig(config)
 	assert.Error(t, err)
@@ -163,25 +117,8 @@ func TestValidateConfig_InvalidBatchSize(t *testing.T) {
 }
 
 func TestValidateConfig_InvalidRetryAttempts(t *testing.T) {
-	config := &Config{
-		Redis: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6379,
-			Password: "",
-			Database: 0,
-		},
-		Valkey: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6380,
-			Password: "",
-			Database: 0,
-		},
-		Migration: MigrationConfig{
-			BatchSize:     1000,
-			RetryAttempts: -1, // Invalid retry attempts
-			LogLevel:      "info",
-		},
-	}
+	config := createValidConfig()
+	config.Migration.RetryAttempts = -1 // Invalid retry attempts
 
 	err := ValidateConfig(config)
 	assert.Error(t, err)
@@ -189,25 +126,8 @@ func TestValidateConfig_InvalidRetryAttempts(t *testing.T) {
 }
 
 func TestValidateConfig_InvalidLogLevel(t *testing.T) {
-	config := &Config{
-		Redis: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6379,
-			Password: "",
-			Database: 0,
-		},
-		Valkey: DatabaseConfig{
-			Host:     "localhost",
-			Port:     6380,
-			Password: "",
-			Database: 0,
-		},
-		Migration: MigrationConfig{
-			BatchSize:     1000,
-			RetryAttempts: 3,
-			LogLevel:      "invalid", // Invalid log level
-		},
-	}
+	config := createValidConfig()
+	config.Migration.LogLevel = "invalid" // Invalid log level
 
 	err := ValidateConfig(config)
 	assert.Error(t, err)
@@ -235,6 +155,25 @@ func TestLoadConfigFromEnv_WithDefaults(t *testing.T) {
 	assert.Equal(t, 1000, config.Migration.BatchSize)
 	assert.Equal(t, 3, config.Migration.RetryAttempts)
 	assert.Equal(t, "info", config.Migration.LogLevel)
+
+	// Check timeout defaults
+	assert.Equal(t, 30*time.Second, config.Redis.ConnectionTimeout)
+	assert.Equal(t, 10*time.Second, config.Redis.OperationTimeout)
+	assert.Equal(t, 60*time.Second, config.Redis.LargeDataTimeout)
+
+	assert.Equal(t, 30*time.Second, config.Valkey.ConnectionTimeout)
+	assert.Equal(t, 10*time.Second, config.Valkey.OperationTimeout)
+	assert.Equal(t, 60*time.Second, config.Valkey.LargeDataTimeout)
+
+	assert.Equal(t, 30*time.Second, config.Migration.TimeoutConfig.ConnectionTimeout)
+	assert.Equal(t, 10*time.Second, config.Migration.TimeoutConfig.DefaultOperation)
+	assert.Equal(t, 5*time.Second, config.Migration.TimeoutConfig.StringOperation)
+	assert.Equal(t, 15*time.Second, config.Migration.TimeoutConfig.HashOperation)
+	assert.Equal(t, 15*time.Second, config.Migration.TimeoutConfig.ListOperation)
+	assert.Equal(t, 15*time.Second, config.Migration.TimeoutConfig.SetOperation)
+	assert.Equal(t, 20*time.Second, config.Migration.TimeoutConfig.SortedSetOperation)
+	assert.Equal(t, int64(10000), config.Migration.TimeoutConfig.LargeDataThreshold)
+	assert.Equal(t, 2.0, config.Migration.TimeoutConfig.LargeDataMultiplier)
 }
 
 func TestLoadConfigFromEnv_WithEnvironmentVariables(t *testing.T) {
@@ -328,11 +267,240 @@ func TestGetEnvInt(t *testing.T) {
 func clearEnvVars() {
 	envVars := []string{
 		"RVM_REDIS_HOST", "RVM_REDIS_PORT", "RVM_REDIS_PASSWORD", "RVM_REDIS_DATABASE",
+		"RVM_REDIS_CONNECTION_TIMEOUT", "RVM_REDIS_OPERATION_TIMEOUT", "RVM_REDIS_LARGE_DATA_TIMEOUT",
 		"RVM_VALKEY_HOST", "RVM_VALKEY_PORT", "RVM_VALKEY_PASSWORD", "RVM_VALKEY_DATABASE",
+		"RVM_VALKEY_CONNECTION_TIMEOUT", "RVM_VALKEY_OPERATION_TIMEOUT", "RVM_VALKEY_LARGE_DATA_TIMEOUT",
 		"RVM_MIGRATION_BATCH_SIZE", "RVM_MIGRATION_RETRY_ATTEMPTS", "RVM_MIGRATION_LOG_LEVEL",
+		"RVM_TIMEOUT_CONNECTION", "RVM_TIMEOUT_DEFAULT_OPERATION", "RVM_TIMEOUT_STRING_OPERATION",
+		"RVM_TIMEOUT_HASH_OPERATION", "RVM_TIMEOUT_LIST_OPERATION", "RVM_TIMEOUT_SET_OPERATION",
+		"RVM_TIMEOUT_SORTED_SET_OPERATION", "RVM_TIMEOUT_LARGE_DATA_THRESHOLD", "RVM_TIMEOUT_LARGE_DATA_MULTIPLIER",
 	}
 
 	for _, envVar := range envVars {
 		os.Unsetenv(envVar)
 	}
+}
+func TestValidateTimeoutConfig_ValidConfiguration(t *testing.T) {
+	timeoutConfig := &TimeoutConfig{
+		ConnectionTimeout:   30 * time.Second,
+		DefaultOperation:    10 * time.Second,
+		StringOperation:     5 * time.Second,
+		HashOperation:       15 * time.Second,
+		ListOperation:       15 * time.Second,
+		SetOperation:        15 * time.Second,
+		SortedSetOperation:  20 * time.Second,
+		LargeDataThreshold:  10000,
+		LargeDataMultiplier: 2.0,
+	}
+
+	err := validateTimeoutConfig(timeoutConfig)
+	assert.NoError(t, err)
+}
+
+func TestValidateTimeoutConfig_InvalidTimeouts(t *testing.T) {
+	testCases := []struct {
+		name          string
+		modifyConfig  func(*TimeoutConfig)
+		expectedError string
+	}{
+		{
+			name: "negative connection timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.ConnectionTimeout = -1 * time.Second
+			},
+			expectedError: "connection timeout must be positive",
+		},
+		{
+			name: "zero default operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.DefaultOperation = 0
+			},
+			expectedError: "default operation timeout must be positive",
+		},
+		{
+			name: "negative string operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.StringOperation = -5 * time.Second
+			},
+			expectedError: "string operation timeout must be positive",
+		},
+		{
+			name: "zero hash operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.HashOperation = 0
+			},
+			expectedError: "hash operation timeout must be positive",
+		},
+		{
+			name: "negative list operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.ListOperation = -10 * time.Second
+			},
+			expectedError: "list operation timeout must be positive",
+		},
+		{
+			name: "zero set operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.SetOperation = 0
+			},
+			expectedError: "set operation timeout must be positive",
+		},
+		{
+			name: "negative sorted set operation timeout",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.SortedSetOperation = -20 * time.Second
+			},
+			expectedError: "sorted set operation timeout must be positive",
+		},
+		{
+			name: "zero large data threshold",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.LargeDataThreshold = 0
+			},
+			expectedError: "large data threshold must be positive",
+		},
+		{
+			name: "negative large data threshold",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.LargeDataThreshold = -1000
+			},
+			expectedError: "large data threshold must be positive",
+		},
+		{
+			name: "multiplier too small",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.LargeDataMultiplier = 1.0
+			},
+			expectedError: "large data multiplier must be greater than 1.0",
+		},
+		{
+			name: "multiplier negative",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.LargeDataMultiplier = -2.0
+			},
+			expectedError: "large data multiplier must be greater than 1.0",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			timeoutConfig := &TimeoutConfig{
+				ConnectionTimeout:   30 * time.Second,
+				DefaultOperation:    10 * time.Second,
+				StringOperation:     5 * time.Second,
+				HashOperation:       15 * time.Second,
+				ListOperation:       15 * time.Second,
+				SetOperation:        15 * time.Second,
+				SortedSetOperation:  20 * time.Second,
+				LargeDataThreshold:  10000,
+				LargeDataMultiplier: 2.0,
+			}
+
+			tc.modifyConfig(timeoutConfig)
+
+			err := validateTimeoutConfig(timeoutConfig)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedError)
+		})
+	}
+}
+
+func TestValidateTimeoutConfig_TimeoutTooLarge(t *testing.T) {
+	testCases := []struct {
+		name          string
+		modifyConfig  func(*TimeoutConfig)
+		expectedError string
+	}{
+		{
+			name: "connection timeout too large",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.ConnectionTimeout = 15 * time.Minute
+			},
+			expectedError: "connection timeout too large",
+		},
+		{
+			name: "default operation timeout too large",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.DefaultOperation = 12 * time.Minute
+			},
+			expectedError: "default operation timeout too large",
+		},
+		{
+			name: "string operation timeout too large",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.StringOperation = 11 * time.Minute
+			},
+			expectedError: "string operation timeout too large",
+		},
+		{
+			name: "multiplier too large",
+			modifyConfig: func(tc *TimeoutConfig) {
+				tc.LargeDataMultiplier = 15.0
+			},
+			expectedError: "large data multiplier too large",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			timeoutConfig := &TimeoutConfig{
+				ConnectionTimeout:   30 * time.Second,
+				DefaultOperation:    10 * time.Second,
+				StringOperation:     5 * time.Second,
+				HashOperation:       15 * time.Second,
+				ListOperation:       15 * time.Second,
+				SetOperation:        15 * time.Second,
+				SortedSetOperation:  20 * time.Second,
+				LargeDataThreshold:  10000,
+				LargeDataMultiplier: 2.0,
+			}
+
+			tc.modifyConfig(timeoutConfig)
+
+			err := validateTimeoutConfig(timeoutConfig)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedError)
+		})
+	}
+}
+
+func TestValidateConfig_WithTimeoutValidation(t *testing.T) {
+	config := createValidConfig()
+	config.Migration.TimeoutConfig.ConnectionTimeout = -1 * time.Second // Invalid
+
+	err := ValidateConfig(config)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "connection timeout must be positive")
+}
+
+func TestLoadConfigFromEnv_WithTimeoutEnvironmentVariables(t *testing.T) {
+	// Clear any existing environment variables
+	clearEnvVars()
+
+	// Set timeout-related environment variables
+	os.Setenv("RVM_TIMEOUT_CONNECTION", "45s")
+	os.Setenv("RVM_TIMEOUT_DEFAULT_OPERATION", "12s")
+	os.Setenv("RVM_TIMEOUT_STRING_OPERATION", "6s")
+	os.Setenv("RVM_TIMEOUT_HASH_OPERATION", "18s")
+	os.Setenv("RVM_TIMEOUT_LIST_OPERATION", "18s")
+	os.Setenv("RVM_TIMEOUT_SET_OPERATION", "18s")
+	os.Setenv("RVM_TIMEOUT_SORTED_SET_OPERATION", "25s")
+	os.Setenv("RVM_TIMEOUT_LARGE_DATA_THRESHOLD", "15000")
+	os.Setenv("RVM_TIMEOUT_LARGE_DATA_MULTIPLIER", "2.5")
+
+	defer clearEnvVars()
+
+	config, err := LoadConfigFromEnv()
+	require.NoError(t, err)
+
+	// Check timeout configuration values
+	assert.Equal(t, 45*time.Second, config.Migration.TimeoutConfig.ConnectionTimeout)
+	assert.Equal(t, 12*time.Second, config.Migration.TimeoutConfig.DefaultOperation)
+	assert.Equal(t, 6*time.Second, config.Migration.TimeoutConfig.StringOperation)
+	assert.Equal(t, 18*time.Second, config.Migration.TimeoutConfig.HashOperation)
+	assert.Equal(t, 18*time.Second, config.Migration.TimeoutConfig.ListOperation)
+	assert.Equal(t, 18*time.Second, config.Migration.TimeoutConfig.SetOperation)
+	assert.Equal(t, 25*time.Second, config.Migration.TimeoutConfig.SortedSetOperation)
+	assert.Equal(t, int64(15000), config.Migration.TimeoutConfig.LargeDataThreshold)
+	assert.Equal(t, 2.5, config.Migration.TimeoutConfig.LargeDataMultiplier)
 }

@@ -99,6 +99,18 @@ This document specifies the requirements for a Go-based migration tool that tran
 
 ### Requirement 8
 
+**User Story:** As a database administrator, I want configurable timeout settings for different operations, so that I can handle large data structures without encountering timeout errors.
+
+#### Acceptance Criteria
+
+1. WHEN the Migration Tool is configured THEN the system SHALL support separate timeout values for connection establishment and data operations
+2. WHEN processing large data structures THEN the Migration Tool SHALL use operation-specific timeouts that can be configured independently for different data types
+3. WHEN timeout values are specified THEN the Migration Tool SHALL accept timeout configuration through command-line flags, environment variables, and configuration files
+4. WHEN large hashes or other complex data types are encountered THEN the Migration Tool SHALL apply appropriate extended timeouts to prevent i/o timeout errors
+5. WHEN timeout configuration is invalid THEN the Migration Tool SHALL validate timeout values and report configuration errors with suggested valid ranges
+
+### Requirement 9
+
 **User Story:** As a developer, I want the Migration Tool to be thoroughly unit tested, so that I can ensure reliability and maintainability of the codebase.
 
 #### Acceptance Criteria
