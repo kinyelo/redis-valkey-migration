@@ -64,6 +64,9 @@ func (gsm *GracefulShutdownManager) InitiateShutdown() {
 		// Cancel the context to signal all operations to stop
 		gsm.cancel()
 
+		// Give operations a brief moment to detect cancellation and stop gracefully
+		time.Sleep(100 * time.Millisecond)
+
 		// Create a timeout context for the shutdown process
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), gsm.shutdownTimeout)
 		defer shutdownCancel()

@@ -249,6 +249,7 @@ func (me *MigrationEngine) performMigration(keys []string) error {
 		// Migrate individual key with error handling
 		if err := me.migrateKey(key); err != nil {
 			errorAggregator.Add(err)
+			me.monitor.IncrementFailed()
 
 			// Check if error is critical
 			if IsCritical(err) {
@@ -262,7 +263,7 @@ func (me *MigrationEngine) performMigration(keys []string) error {
 
 			me.logger.Warnf("Continuing migration despite error for key %s: %v", key, err)
 		} else {
-			// Mark key as processed for resume functionality
+			// Mark key as processed for resume functionality only on successful migration
 			me.resumeState.MarkProcessed(key)
 			me.monitor.IncrementProcessed()
 		}
@@ -294,7 +295,6 @@ func (me *MigrationEngine) migrateKey(key string) error {
 	// Process the key based on its type
 	err = me.processor.ProcessKey(key, keyType, me.sourceClient, me.targetClient)
 	if err != nil {
-		me.monitor.IncrementFailed()
 		return WrapError(err, "key processing").WithKey(key)
 	}
 
@@ -311,7 +311,15 @@ func (me *MigrationEngine) verifyMigration(keys []string) error {
 	for _, key := range keys {
 		result := me.verifier.VerifyKey(key, me.sourceClient, me.targetClient)
 		if !result.Success {
-			err := fmt.Errorf("verification failed: %s", result.ErrorMsg)
+			var errorMsg string
+			if result.ErrorMsg != "" {
+				errorMsg = result.ErrorMsg
+			} else if len(result.Mismatches) > 0 {
+				errorMsg = fmt.Sprintf("data mismatches found: %v", result.Mismatches)
+			} else {
+				errorMsg = "verification failed for unknown reason"
+			}
+			err := fmt.Errorf("verification failed: %s", errorMsg)
 			errorAggregator.Add(WrapError(err, "verification").WithKey(key))
 		}
 	}
