@@ -66,6 +66,10 @@ func (p *migrationProcessor) ProcessKey(key, keyType string, source, target clie
 		return p.ProcessSet(key, source, target)
 	case "zset":
 		return p.ProcessSortedSet(key, source, target)
+	case "none":
+		// Key doesn't exist (expired, deleted, or temporary)
+		p.logger.Warnf("Key '%s' no longer exists (type: none). Skipping migration.", key)
+		return nil
 	default:
 		return fmt.Errorf("unsupported key type: %s", keyType)
 	}

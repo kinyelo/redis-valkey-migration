@@ -511,3 +511,28 @@ func TestProcessWrongType(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expected []redis.Z value")
 }
+
+// Test processing key with "none" type (non-existent key)
+func TestProcessKey_NoneType(t *testing.T) {
+	source := NewMockDatabaseClient()
+	target := NewMockDatabaseClient()
+	mockLogger := &MockLogger{}
+
+	// Set up expectation for the warning log
+	mockLogger.On("Warnf", mock.AnythingOfType("string"), mock.Anything).Return()
+
+	processor := NewDataProcessor(mockLogger)
+
+	// Test processing a key with "none" type (key doesn't exist)
+	err := processor.ProcessKey("redisson__execute_task_once_latch:{mfa_sessions_params}", "none", source, target)
+
+	// Should not return an error - key should be skipped
+	assert.NoError(t, err)
+
+	// Verify that the warning was logged
+	mockLogger.AssertCalled(t, "Warnf", mock.MatchedBy(func(format string) bool {
+		return assert.Contains(t, format, "no longer exists") &&
+			assert.Contains(t, format, "type: none") &&
+			assert.Contains(t, format, "Skipping migration")
+	}), mock.Anything)
+}

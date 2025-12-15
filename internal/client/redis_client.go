@@ -121,6 +121,8 @@ func (r *RedisClient) GetValue(key string) (interface{}, error) {
 		return r.client.SMembers(ctx, key).Result()
 	case "zset":
 		return r.client.ZRangeWithScores(ctx, key, 0, -1).Result()
+	case "none":
+		return nil, fmt.Errorf("key does not exist")
 	default:
 		return nil, fmt.Errorf("unsupported key type: %s", keyType)
 	}
@@ -152,6 +154,9 @@ func (r *RedisClient) estimateDataSize(key, keyType string) (int64, error) {
 		// For sorted sets, get the cardinality
 		length, err := r.client.ZCard(ctx, key).Result()
 		return length, err
+	case "none":
+		// Key doesn't exist, size is 0
+		return 0, nil
 	default:
 		return 0, nil
 	}
