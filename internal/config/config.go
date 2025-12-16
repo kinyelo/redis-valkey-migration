@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -30,10 +31,11 @@ type DatabaseConfig struct {
 
 // MigrationConfig holds migration-specific settings
 type MigrationConfig struct {
-	BatchSize     int           `mapstructure:"batch_size"`
-	RetryAttempts int           `mapstructure:"retry_attempts"`
-	LogLevel      string        `mapstructure:"log_level"`
-	TimeoutConfig TimeoutConfig `mapstructure:"timeout_config"`
+	BatchSize          int           `mapstructure:"batch_size"`
+	RetryAttempts      int           `mapstructure:"retry_attempts"`
+	LogLevel           string        `mapstructure:"log_level"`
+	TimeoutConfig      TimeoutConfig `mapstructure:"timeout_config"`
+	CollectionPatterns []string      `mapstructure:"collection_patterns"`
 }
 
 // TimeoutConfig holds operation-specific timeout settings
@@ -149,6 +151,7 @@ func bindEnvVars() {
 	viper.BindEnv("migration.batch_size", "RVM_MIGRATION_BATCH_SIZE")
 	viper.BindEnv("migration.retry_attempts", "RVM_MIGRATION_RETRY_ATTEMPTS")
 	viper.BindEnv("migration.log_level", "RVM_MIGRATION_LOG_LEVEL")
+	viper.BindEnv("migration.collection_patterns", "RVM_MIGRATION_COLLECTION_PATTERNS")
 
 	// Timeout configuration environment variables
 	viper.BindEnv("migration.timeout_config.connection_timeout", "RVM_TIMEOUT_CONNECTION")
@@ -177,6 +180,10 @@ func ValidateConfig(config *Config) error {
 	}
 
 	if err := validateTimeoutConfig(&config.Migration.TimeoutConfig); err != nil {
+		return err
+	}
+
+	if err := validateCollectionPatterns(config.Migration.CollectionPatterns); err != nil {
 		return err
 	}
 
@@ -314,6 +321,32 @@ func validateTimeoutConfig(timeoutConfig *TimeoutConfig) error {
 	return nil
 }
 
+// validateCollectionPatterns validates collection pattern syntax
+func validateCollectionPatterns(patterns []string) error {
+	if len(patterns) == 0 {
+		return nil // Empty patterns are valid (means migrate all keys)
+	}
+
+	for i, pattern := range patterns {
+		if pattern == "" {
+			return fmt.Errorf("collection pattern %d cannot be empty", i+1)
+		}
+
+		// Basic validation - check for obviously invalid patterns
+		if strings.Contains(pattern, "**") {
+			return fmt.Errorf("collection pattern %d contains invalid '**' sequence: %s", i+1, pattern)
+		}
+
+		// Test the pattern with filepath.Match to ensure it's valid
+		_, err := filepath.Match(pattern, "test")
+		if err != nil {
+			return fmt.Errorf("collection pattern %d is invalid: %s - %w", i+1, pattern, err)
+		}
+	}
+
+	return nil
+}
+
 // LoadConfigFromEnv loads configuration from environment variables only
 func LoadConfigFromEnv() (*Config, error) {
 	config := &Config{
@@ -336,9 +369,10 @@ func LoadConfigFromEnv() (*Config, error) {
 			LargeDataTimeout:  getEnvDuration("RVM_VALKEY_LARGE_DATA_TIMEOUT", 60*time.Second),
 		},
 		Migration: MigrationConfig{
-			BatchSize:     getEnvInt("RVM_MIGRATION_BATCH_SIZE", 1000),
-			RetryAttempts: getEnvInt("RVM_MIGRATION_RETRY_ATTEMPTS", 3),
-			LogLevel:      getEnvString("RVM_MIGRATION_LOG_LEVEL", "info"),
+			BatchSize:          getEnvInt("RVM_MIGRATION_BATCH_SIZE", 1000),
+			RetryAttempts:      getEnvInt("RVM_MIGRATION_RETRY_ATTEMPTS", 3),
+			LogLevel:           getEnvString("RVM_MIGRATION_LOG_LEVEL", "info"),
+			CollectionPatterns: getEnvStringSlice("RVM_MIGRATION_COLLECTION_PATTERNS", []string{}),
 			TimeoutConfig: TimeoutConfig{
 				ConnectionTimeout:   getEnvDuration("RVM_TIMEOUT_CONNECTION", 30*time.Second),
 				DefaultOperation:    getEnvDuration("RVM_TIMEOUT_DEFAULT_OPERATION", 10*time.Second),
@@ -404,6 +438,18 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
 		}
+	}
+	return defaultValue
+}
+
+// getEnvStringSlice gets a string slice environment variable with a default value
+// Expects comma-separated values in the environment variable
+func getEnvStringSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		if value == "" {
+			return []string{}
+		}
+		return strings.Split(value, ",")
 	}
 	return defaultValue
 }

@@ -19,6 +19,9 @@ type DatabaseClient interface {
 	// GetAllKeys retrieves all keys from the database
 	GetAllKeys() ([]string, error)
 
+	// GetKeysByPattern retrieves keys matching a specific pattern
+	GetKeysByPattern(pattern string) ([]string, error)
+
 	// GetKeyType returns the data type of a key (string, hash, list, set, zset)
 	GetKeyType(key string) (string, error)
 

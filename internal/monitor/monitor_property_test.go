@@ -223,6 +223,164 @@ func TestProperty_ProgressTrackingAccuracy(t *testing.T) {
 	properties.TestingRun(t)
 }
 
+// **Feature: redis-valkey-migration, Property 19: Filtered Progress Reporting**
+// **Validates: Requirements 9.5**
+func TestProperty_FilteredProgressReporting(t *testing.T) {
+	parameters := gopter.DefaultTestParameters()
+	parameters.MinSuccessfulTests = 100
+	properties := gopter.NewProperties(parameters)
+
+	properties.Property("filtered migration progress is based on filtered key set size", prop.ForAll(
+		func(totalKeysInDB int, filteredKeyCount int) bool {
+			if totalKeysInDB <= 0 || filteredKeyCount < 0 || filteredKeyCount > totalKeysInDB {
+				return true // Skip invalid inputs
+			}
+
+			monitor := NewProgressMonitor(createTestLogger())
+
+			// Initialize with filtered key count (not total DB size)
+			monitor.Initialize(filteredKeyCount)
+
+			// Verify initial state uses filtered count
+			processed, total, failed, percentage := monitor.GetProgress()
+			if total != filteredKeyCount {
+				return false
+			}
+			if processed != 0 || failed != 0 || percentage != 0 {
+				return false
+			}
+
+			// Verify statistics use filtered count
+			stats := monitor.GetStats()
+			if stats.TotalKeys != filteredKeyCount {
+				return false
+			}
+
+			return true
+		},
+		gen.IntRange(1, 10000), // Total keys in database
+		gen.IntRange(0, 1000),  // Filtered key count
+	))
+
+	properties.Property("progress percentage calculation uses filtered key set", prop.ForAll(
+		func(filteredKeyCount int, processedKeys int) bool {
+			if filteredKeyCount <= 0 || processedKeys < 0 || processedKeys > filteredKeyCount {
+				return true // Skip invalid inputs
+			}
+
+			monitor := NewProgressMonitor(createTestLogger())
+			monitor.Initialize(filteredKeyCount)
+
+			// Process some keys from the filtered set
+			for i := 0; i < processedKeys; i++ {
+				monitor.IncrementProcessed()
+			}
+
+			_, total, _, percentage := monitor.GetProgress()
+			expectedPercentage := float64(processedKeys) / float64(filteredKeyCount) * 100
+
+			// Progress should be based on filtered set, not entire database
+			if total != filteredKeyCount {
+				return false
+			}
+
+			// Percentage should be calculated against filtered set
+			if abs(percentage-expectedPercentage) > 0.001 {
+				return false
+			}
+
+			return true
+		},
+		gen.IntRange(1, 1000), // Filtered key count
+		gen.IntRange(0, 1000), // Processed keys
+	))
+
+	properties.Property("filtered migration completion is accurate", prop.ForAll(
+		func(filteredKeyCount int) bool {
+			if filteredKeyCount <= 0 {
+				return true // Skip invalid inputs
+			}
+
+			monitor := NewProgressMonitor(createTestLogger())
+			monitor.Initialize(filteredKeyCount)
+
+			// Process all filtered keys
+			for i := 0; i < filteredKeyCount; i++ {
+				monitor.IncrementProcessed()
+			}
+
+			processed, total, _, percentage := monitor.GetProgress()
+
+			// Should show 100% completion when all filtered keys are processed
+			if processed != filteredKeyCount {
+				return false
+			}
+			if total != filteredKeyCount {
+				return false
+			}
+			if abs(percentage-100.0) > 0.001 {
+				return false
+			}
+
+			return true
+		},
+		gen.IntRange(1, 1000), // Filtered key count
+	))
+
+	properties.Property("filtered migration statistics are independent of total database size", prop.ForAll(
+		func(totalDBKeys int, filteredKeys int, processedKeys int) bool {
+			if totalDBKeys <= 0 || filteredKeys <= 0 || filteredKeys > totalDBKeys ||
+				processedKeys < 0 || processedKeys > filteredKeys {
+				return true // Skip invalid inputs
+			}
+
+			monitor := NewProgressMonitor(createTestLogger())
+			monitor.Initialize(filteredKeys) // Only filtered keys matter
+
+			// Process some keys
+			successCount := processedKeys / 2
+			failureCount := processedKeys - successCount
+
+			for i := 0; i < successCount; i++ {
+				monitor.IncrementProcessed()
+			}
+			for i := 0; i < failureCount; i++ {
+				monitor.IncrementFailed()
+			}
+
+			stats := monitor.GetStats()
+
+			// Statistics should be based only on filtered set
+			if stats.TotalKeys != filteredKeys {
+				return false
+			}
+			if stats.ProcessedKeys != processedKeys {
+				return false
+			}
+			if stats.SuccessfulKeys != successCount {
+				return false
+			}
+			if stats.FailedKeys != failureCount {
+				return false
+			}
+
+			// Progress percentage should be based on filtered set
+			_, _, _, percentage := monitor.GetProgress()
+			expectedPercentage := float64(processedKeys) / float64(filteredKeys) * 100
+			if abs(percentage-expectedPercentage) > 0.001 {
+				return false
+			}
+
+			return true
+		},
+		gen.IntRange(100, 10000), // Total DB keys
+		gen.IntRange(1, 100),     // Filtered keys
+		gen.IntRange(0, 100),     // Processed keys
+	))
+
+	properties.TestingRun(t)
+}
+
 // Helper function to generate test keys
 func generateTestKey(index int) string {
 	return "test:key:" + string(rune('0'+index%10)) + string(rune('a'+index%26))

@@ -42,6 +42,10 @@ func BindFlags(cmd *cobra.Command) {
 	cmd.Flags().Int64("large-data-threshold", 10000, "Threshold for considering data structures as large (number of elements)")
 	cmd.Flags().Float64("large-data-multiplier", 2.0, "Multiplier for extending timeouts on large data structures")
 
+	// Collection pattern flags
+	cmd.Flags().StringSlice("pattern", []string{}, "Key patterns to migrate (glob-style, e.g., 'user:*', 'session:*'). Can be specified multiple times.")
+	cmd.Flags().StringSlice("collections", []string{}, "Alias for --pattern. Key patterns to migrate (glob-style). Can be specified multiple times.")
+
 	// Bind flags to viper
 	viper.BindPFlag("redis.host", cmd.Flags().Lookup("redis-host"))
 	viper.BindPFlag("redis.port", cmd.Flags().Lookup("redis-port"))
@@ -71,6 +75,10 @@ func BindFlags(cmd *cobra.Command) {
 	viper.BindPFlag("migration.timeout_config.sorted_set_operation", cmd.Flags().Lookup("sorted-set-timeout"))
 	viper.BindPFlag("migration.timeout_config.large_data_threshold", cmd.Flags().Lookup("large-data-threshold"))
 	viper.BindPFlag("migration.timeout_config.large_data_multiplier", cmd.Flags().Lookup("large-data-multiplier"))
+
+	viper.BindPFlag("migration.collection_patterns", cmd.Flags().Lookup("pattern"))
+	// Also bind collections flag to the same config key
+	viper.BindPFlag("migration.collection_patterns", cmd.Flags().Lookup("collections"))
 }
 
 // LoadConfigWithFlags loads configuration with command-line flag support

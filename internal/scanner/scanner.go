@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 // KeyScanner defines the interface for key scanning operations
 type KeyScanner interface {
 	ScanAllKeys(client client.DatabaseClient) ([]string, error)
+	ScanKeysByPatterns(client client.DatabaseClient, patterns []string) ([]string, error)
+	MatchesPatterns(key string, patterns []string) bool
 }
 
 // KeyInfo represents information about a discovered key
@@ -64,6 +67,56 @@ func (ks *keyScanner) ScanAllKeys(client client.DatabaseClient) ([]string, error
 
 	ks.logger.Infof("Scanned %d keys from database", len(keys))
 	return keys, nil
+}
+
+// ScanKeysByPatterns implements KeyScanner interface
+func (ks *keyScanner) ScanKeysByPatterns(client client.DatabaseClient, patterns []string) ([]string, error) {
+	if client == nil {
+		return nil, fmt.Errorf("database client is nil")
+	}
+
+	if len(patterns) == 0 {
+		ks.logger.Info("No patterns specified, scanning all keys")
+		return ks.ScanAllKeys(client)
+	}
+
+	// Get all keys first
+	allKeys, err := client.GetAllKeys()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all keys: %w", err)
+	}
+
+	// Filter keys by patterns
+	var matchedKeys []string
+	for _, key := range allKeys {
+		if ks.MatchesPatterns(key, patterns) {
+			matchedKeys = append(matchedKeys, key)
+		}
+	}
+
+	ks.logger.Infof("Scanned %d keys matching patterns from %d total keys", len(matchedKeys), len(allKeys))
+	return matchedKeys, nil
+}
+
+// MatchesPatterns implements KeyScanner interface
+func (ks *keyScanner) MatchesPatterns(key string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return true // No patterns means match all
+	}
+
+	for _, pattern := range patterns {
+		matched, err := filepath.Match(pattern, key)
+		if err != nil {
+			// Log error but continue with other patterns
+			ks.logger.Warnf("Invalid pattern '%s': %v", pattern, err)
+			continue
+		}
+		if matched {
+			return true
+		}
+	}
+
+	return false
 }
 
 // NewScanner creates a new Scanner instance

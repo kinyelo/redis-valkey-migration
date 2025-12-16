@@ -72,6 +72,30 @@ func (v *ValkeyClient) GetAllKeys() ([]string, error) {
 	return keys, nil
 }
 
+// GetKeysByPattern retrieves keys matching a specific pattern from Valkey
+func (v *ValkeyClient) GetKeysByPattern(pattern string) ([]string, error) {
+	if v.client == nil {
+		return nil, fmt.Errorf("Valkey client not connected")
+	}
+
+	// Use default operation timeout for scanning
+	ctx, cancel := v.config.OperationContext("scan", 0)
+	defer cancel()
+
+	var keys []string
+	iter := v.client.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan keys with pattern %s: %w", pattern, err)
+	}
+
+	return keys, nil
+}
+
 // GetKeyType returns the data type of a Valkey key
 func (v *ValkeyClient) GetKeyType(key string) (string, error) {
 	if v.client == nil {

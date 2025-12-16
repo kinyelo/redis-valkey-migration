@@ -71,6 +71,30 @@ func (r *RedisClient) GetAllKeys() ([]string, error) {
 	return keys, nil
 }
 
+// GetKeysByPattern retrieves keys matching a specific pattern from Redis
+func (r *RedisClient) GetKeysByPattern(pattern string) ([]string, error) {
+	if r.client == nil {
+		return nil, fmt.Errorf("Redis client not connected")
+	}
+
+	// Use default operation timeout for scanning
+	ctx, cancel := r.config.OperationContext("scan", 0)
+	defer cancel()
+
+	var keys []string
+	iter := r.client.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan keys with pattern %s: %w", pattern, err)
+	}
+
+	return keys, nil
+}
+
 // GetKeyType returns the data type of a Redis key
 func (r *RedisClient) GetKeyType(key string) (string, error) {
 	if r.client == nil {

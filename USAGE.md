@@ -56,6 +56,25 @@ redis-valkey-migration migrate [flags]
 - `--progress-interval`: Progress reporting interval (default: 5s)
 - `--max-concurrency`: Maximum concurrent operations (default: 10)
 
+#### Collection Pattern Flags
+
+The tool supports migrating specific collections of keys using glob-style patterns:
+
+- `--pattern`: Key patterns to migrate (can be specified multiple times)
+- `--collections`: Alias for `--pattern` (can be specified multiple times)
+
+**Pattern Syntax:**
+- Use `*` to match any characters: `user:*` matches `user:123`, `user:abc`, etc.
+- Use `?` to match single character: `user:?` matches `user:1`, `user:a`, etc.
+- Use `[abc]` to match any character in brackets: `user:[123]` matches `user:1`, `user:2`, `user:3`
+- Patterns are case-sensitive
+- Multiple patterns can be specified to migrate different collections
+- If no patterns are specified, all keys will be migrated
+
+**Environment Variables:**
+Collection patterns can also be set using environment variables:
+- `RVM_MIGRATION_COLLECTION_PATTERNS`: Comma-separated list of patterns
+
 #### Timeout Configuration Flags
 
 The tool provides configurable timeouts for different operations to handle large data structures and varying network conditions:
@@ -174,6 +193,67 @@ redis-valkey-migration migrate \
   --verbose
 ```
 
+### Collection Pattern Migration
+
+#### Migrate Specific Collections
+
+Migrate only user-related keys:
+
+```bash
+redis-valkey-migration migrate --pattern "user:*"
+```
+
+#### Multiple Collections
+
+Migrate user and session data:
+
+```bash
+redis-valkey-migration migrate \
+  --pattern "user:*" \
+  --pattern "session:*"
+```
+
+#### Complex Patterns
+
+Migrate specific data structures:
+
+```bash
+redis-valkey-migration migrate \
+  --pattern "user:*:profile" \
+  --pattern "cache:data:*" \
+  --pattern "temp_*"
+```
+
+#### Using Collections Alias
+
+Alternative syntax using `--collections`:
+
+```bash
+redis-valkey-migration migrate \
+  --collections "user:*" \
+  --collections "session:*"
+```
+
+#### Dry Run with Patterns
+
+Preview what would be migrated with patterns:
+
+```bash
+redis-valkey-migration migrate \
+  --dry-run \
+  --pattern "production:*" \
+  --verbose
+```
+
+#### Environment Variable Patterns
+
+Set patterns via environment variable:
+
+```bash
+export RVM_MIGRATION_COLLECTION_PATTERNS="user:*,session:*,cache:*"
+redis-valkey-migration migrate
+```
+
 ### Timeout Configuration
 
 #### Default Timeout Settings
@@ -228,8 +308,8 @@ redis-valkey-migration migrate
 
 1. Validates configuration parameters
 2. Establishes connections to Redis and Valkey
-3. Discovers all keys in the Redis database
-4. Reports total number of keys to migrate
+3. Discovers keys in the Redis database (all keys or filtered by patterns)
+4. Reports total number of keys to migrate (filtered count if patterns used)
 
 ### Phase 2: Data Transfer
 
@@ -317,8 +397,9 @@ Final statistics include:
 
 1. **Backup**: Create backups of both databases
 2. **Test**: Run dry-run to validate configuration
-3. **Resources**: Ensure adequate network and memory resources
-4. **Monitoring**: Set up monitoring for both databases
+3. **Patterns**: Use collection patterns for targeted migrations when appropriate
+4. **Resources**: Ensure adequate network and memory resources
+5. **Monitoring**: Set up monitoring for both databases
 
 ### During Migration
 

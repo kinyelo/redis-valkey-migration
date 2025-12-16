@@ -29,6 +29,11 @@ func (m *MockDatabaseClient) GetAllKeys() ([]string, error) {
 	return args.Get(0).([]string), args.Error(1)
 }
 
+func (m *MockDatabaseClient) GetKeysByPattern(pattern string) ([]string, error) {
+	args := m.Called(pattern)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockDatabaseClient) GetKeyType(key string) (string, error) {
 	args := m.Called(key)
 	return args.String(0), args.Error(1)
@@ -427,4 +432,287 @@ func generateTestTTLs(count int) map[string]time.Duration {
 		}
 	}
 	return ttls
+}
+
+// Test pattern matching with various glob patterns
+func TestKeyScanner_PatternMatching(t *testing.T) {
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	testCases := []struct {
+		name     string
+		key      string
+		patterns []string
+		expected bool
+	}{
+		{
+			name:     "single_pattern_match",
+			key:      "user:123",
+			patterns: []string{"user:*"},
+			expected: true,
+		},
+		{
+			name:     "single_pattern_no_match",
+			key:      "session:456",
+			patterns: []string{"user:*"},
+			expected: false,
+		},
+		{
+			name:     "multiple_patterns_first_match",
+			key:      "user:123",
+			patterns: []string{"user:*", "session:*"},
+			expected: true,
+		},
+		{
+			name:     "multiple_patterns_second_match",
+			key:      "session:456",
+			patterns: []string{"user:*", "session:*"},
+			expected: true,
+		},
+		{
+			name:     "multiple_patterns_no_match",
+			key:      "cache:789",
+			patterns: []string{"user:*", "session:*"},
+			expected: false,
+		},
+		{
+			name:     "empty_patterns_match_all",
+			key:      "any:key",
+			patterns: []string{},
+			expected: true,
+		},
+		{
+			name:     "complex_pattern_match",
+			key:      "user:123:profile",
+			patterns: []string{"user:*:profile"},
+			expected: true,
+		},
+		{
+			name:     "wildcard_middle_match",
+			key:      "cache:data:temp",
+			patterns: []string{"cache:*:temp"},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := scanner.MatchesPatterns(tc.key, tc.patterns)
+			assert.Equal(t, tc.expected, result, "Pattern matching result for key %s with patterns %v", tc.key, tc.patterns)
+		})
+	}
+}
+
+// Test multiple pattern handling and key collection
+func TestKeyScanner_ScanKeysByPatterns(t *testing.T) {
+	mockClient := &MockDatabaseClient{}
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	// Test data with mixed key patterns
+	keys := []string{
+		"user:1", "user:2", "user:3",
+		"session:a", "session:b",
+		"cache:data:1", "cache:data:2",
+		"temp_file_1", "temp_file_2",
+		"other:key:1",
+	}
+
+	mockClient.On("GetAllKeys").Return(keys, nil)
+
+	testCases := []struct {
+		name            string
+		patterns        []string
+		expectedCount   int
+		expectedMatches []string
+	}{
+		{
+			name:            "single_pattern_user",
+			patterns:        []string{"user:*"},
+			expectedCount:   3,
+			expectedMatches: []string{"user:1", "user:2", "user:3"},
+		},
+		{
+			name:            "single_pattern_session",
+			patterns:        []string{"session:*"},
+			expectedCount:   2,
+			expectedMatches: []string{"session:a", "session:b"},
+		},
+		{
+			name:            "multiple_patterns",
+			patterns:        []string{"user:*", "session:*"},
+			expectedCount:   5,
+			expectedMatches: []string{"user:1", "user:2", "user:3", "session:a", "session:b"},
+		},
+		{
+			name:            "cache_pattern",
+			patterns:        []string{"cache:*"},
+			expectedCount:   2,
+			expectedMatches: []string{"cache:data:1", "cache:data:2"},
+		},
+		{
+			name:            "temp_pattern",
+			patterns:        []string{"temp_*"},
+			expectedCount:   2,
+			expectedMatches: []string{"temp_file_1", "temp_file_2"},
+		},
+		{
+			name:          "no_match_pattern",
+			patterns:      []string{"nonexistent:*"},
+			expectedCount: 0,
+		},
+		{
+			name:          "empty_patterns",
+			patterns:      []string{},
+			expectedCount: len(keys), // Should return all keys
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := scanner.ScanKeysByPatterns(mockClient, tc.patterns)
+			assert.NoError(t, err)
+			assert.Len(t, result, tc.expectedCount)
+
+			if tc.expectedMatches != nil {
+				// Check that all expected matches are present
+				resultSet := make(map[string]bool)
+				for _, key := range result {
+					resultSet[key] = true
+				}
+
+				for _, expectedKey := range tc.expectedMatches {
+					assert.True(t, resultSet[expectedKey], "Expected key %s not found in results", expectedKey)
+				}
+			}
+		})
+	}
+
+	mockClient.AssertExpectations(t)
+}
+
+// Test empty result handling when no keys match patterns
+func TestKeyScanner_EmptyResults(t *testing.T) {
+	mockClient := &MockDatabaseClient{}
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	// Test with keys that won't match our patterns
+	keys := []string{"nomatch:1", "nomatch:2", "different:key"}
+	mockClient.On("GetAllKeys").Return(keys, nil)
+
+	// Use patterns that won't match any keys
+	patterns := []string{"user:*", "session:*"}
+
+	result, err := scanner.ScanKeysByPatterns(mockClient, patterns)
+	assert.NoError(t, err)
+	assert.Empty(t, result, "Should return empty result when no keys match patterns")
+
+	mockClient.AssertExpectations(t)
+}
+
+// Test progress reporting accuracy with filtered key sets
+func TestKeyScanner_ProgressReporting(t *testing.T) {
+	mockClient := &MockDatabaseClient{}
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	// Create a large set of keys with known patterns
+	var allKeys []string
+	userKeys := 0
+	sessionKeys := 0
+
+	for i := 0; i < 100; i++ {
+		if i%3 == 0 {
+			allKeys = append(allKeys, fmt.Sprintf("user:%d", i))
+			userKeys++
+		} else if i%3 == 1 {
+			allKeys = append(allKeys, fmt.Sprintf("session:%d", i))
+			sessionKeys++
+		} else {
+			allKeys = append(allKeys, fmt.Sprintf("other:%d", i))
+		}
+	}
+
+	mockClient.On("GetAllKeys").Return(allKeys, nil)
+
+	testCases := []struct {
+		name          string
+		patterns      []string
+		expectedCount int
+	}{
+		{
+			name:          "user_keys_only",
+			patterns:      []string{"user:*"},
+			expectedCount: userKeys,
+		},
+		{
+			name:          "session_keys_only",
+			patterns:      []string{"session:*"},
+			expectedCount: sessionKeys,
+		},
+		{
+			name:          "user_and_session_keys",
+			patterns:      []string{"user:*", "session:*"},
+			expectedCount: userKeys + sessionKeys,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := scanner.ScanKeysByPatterns(mockClient, tc.patterns)
+			assert.NoError(t, err)
+			assert.Len(t, result, tc.expectedCount, "Filtered key count should match expected count")
+
+			// Verify all returned keys match at least one pattern
+			for _, key := range result {
+				matches := scanner.MatchesPatterns(key, tc.patterns)
+				assert.True(t, matches, "Key %s should match at least one pattern", key)
+			}
+		})
+	}
+
+	mockClient.AssertExpectations(t)
+}
+
+// Test error handling in pattern scanning
+func TestKeyScanner_ErrorHandling(t *testing.T) {
+	mockClient := &MockDatabaseClient{}
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	t.Run("client_error", func(t *testing.T) {
+		mockClient.On("GetAllKeys").Return([]string{}, fmt.Errorf("connection error"))
+
+		result, err := scanner.ScanKeysByPatterns(mockClient, []string{"user:*"})
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "failed to get all keys")
+	})
+
+	t.Run("nil_client", func(t *testing.T) {
+		result, err := scanner.ScanKeysByPatterns(nil, []string{"user:*"})
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "database client is nil")
+	})
+
+	mockClient.AssertExpectations(t)
+}
+
+// Test invalid pattern handling
+func TestKeyScanner_InvalidPatterns(t *testing.T) {
+	mockLogger := &MockLogger{}
+	scanner := NewKeyScanner(mockLogger)
+
+	invalidPatterns := []string{"[", "\\", "[z-a]"}
+	testKey := "test:key"
+
+	for _, pattern := range invalidPatterns {
+		t.Run(fmt.Sprintf("invalid_pattern_%s", pattern), func(t *testing.T) {
+			// Invalid patterns should not match and should not cause crashes
+			matches := scanner.MatchesPatterns(testKey, []string{pattern})
+			assert.False(t, matches, "Invalid pattern should not match any key")
+		})
+	}
 }

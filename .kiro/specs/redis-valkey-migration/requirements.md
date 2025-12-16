@@ -111,6 +111,18 @@ This document specifies the requirements for a Go-based migration tool that tran
 
 ### Requirement 9
 
+**User Story:** As a database administrator, I want to migrate specific collections of keys, so that I can perform targeted migrations based on key patterns or prefixes.
+
+#### Acceptance Criteria
+
+1. WHEN collection patterns are specified THEN the Migration Tool SHALL support glob-style pattern matching for key selection (e.g., "user:*", "session:*")
+2. WHEN multiple collections are specified THEN the Migration Tool SHALL accept multiple pattern arguments and migrate all matching keys
+3. WHEN collection migration is requested THEN the Migration Tool SHALL scan only keys matching the specified patterns instead of all database keys
+4. WHEN no keys match the specified patterns THEN the Migration Tool SHALL report zero matches and complete successfully without error
+5. WHEN collection patterns are provided THEN the Migration Tool SHALL display progress and statistics specific to the filtered key set rather than the entire database
+
+### Requirement 10
+
 **User Story:** As a developer, I want the Migration Tool to be thoroughly unit tested, so that I can ensure reliability and maintainability of the codebase.
 
 #### Acceptance Criteria

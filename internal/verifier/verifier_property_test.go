@@ -402,6 +402,11 @@ func (m *mockDatabaseClient) GetAllKeys() ([]string, error) {
 	return keys, nil
 }
 
+func (m *mockDatabaseClient) GetKeysByPattern(pattern string) ([]string, error) {
+	// Simple pattern matching for testing - just return all keys for now
+	return m.GetAllKeys()
+}
+
 func (m *mockDatabaseClient) GetKeyType(key string) (string, error) {
 	if keyType, exists := m.keyTypes[key]; exists {
 		return keyType, nil

@@ -46,6 +46,7 @@ type EngineConfig struct {
 	ContinueOnError      bool          `json:"continue_on_error"`
 	MaxConcurrency       int           `json:"max_concurrency"`
 	ProgressInterval     time.Duration `json:"progress_interval"`
+	CollectionPatterns   []string      `json:"collection_patterns"`
 }
 
 // DefaultEngineConfig returns default engine configuration
@@ -57,6 +58,7 @@ func DefaultEngineConfig() *EngineConfig {
 		ContinueOnError:      true,
 		MaxConcurrency:       10,
 		ProgressInterval:     5 * time.Second,
+		CollectionPatterns:   []string{}, // Empty means migrate all keys
 	}
 }
 
@@ -212,16 +214,29 @@ func (me *MigrationEngine) connectDatabases() error {
 	return nil
 }
 
-// discoverKeys discovers all keys to migrate
+// discoverKeys discovers keys to migrate based on collection patterns
 func (me *MigrationEngine) discoverKeys() ([]string, error) {
 	me.logger.Info("Discovering keys to migrate...")
 
-	keys, err := me.scanner.ScanAllKeys(me.sourceClient)
-	if err != nil {
-		return nil, WrapError(err, "key discovery")
+	var keys []string
+	var err error
+
+	if len(me.config.CollectionPatterns) > 0 {
+		me.logger.Infof("Using collection patterns: %v", me.config.CollectionPatterns)
+		keys, err = me.scanner.ScanKeysByPatterns(me.sourceClient, me.config.CollectionPatterns)
+		if err != nil {
+			return nil, WrapError(err, "filtered key discovery")
+		}
+		me.logger.Infof("Discovered %d keys matching patterns", len(keys))
+	} else {
+		me.logger.Info("No collection patterns specified, scanning all keys")
+		keys, err = me.scanner.ScanAllKeys(me.sourceClient)
+		if err != nil {
+			return nil, WrapError(err, "key discovery")
+		}
+		me.logger.Infof("Discovered %d keys to migrate", len(keys))
 	}
 
-	me.logger.Infof("Discovered %d keys to migrate", len(keys))
 	return keys, nil
 }
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -31,9 +32,10 @@ func createValidConfig() *Config {
 			LargeDataTimeout:  60 * time.Second,
 		},
 		Migration: MigrationConfig{
-			BatchSize:     1000,
-			RetryAttempts: 3,
-			LogLevel:      "info",
+			BatchSize:          1000,
+			RetryAttempts:      3,
+			LogLevel:           "info",
+			CollectionPatterns: []string{},
 			TimeoutConfig: TimeoutConfig{
 				ConnectionTimeout:   30 * time.Second,
 				DefaultOperation:    10 * time.Second,
@@ -503,4 +505,91 @@ func TestLoadConfigFromEnv_WithTimeoutEnvironmentVariables(t *testing.T) {
 	assert.Equal(t, 25*time.Second, config.Migration.TimeoutConfig.SortedSetOperation)
 	assert.Equal(t, int64(15000), config.Migration.TimeoutConfig.LargeDataThreshold)
 	assert.Equal(t, 2.5, config.Migration.TimeoutConfig.LargeDataMultiplier)
+}
+
+// TestValidateCollectionPatterns tests collection pattern validation
+func TestValidateCollectionPatterns_ValidPatterns(t *testing.T) {
+	validPatterns := [][]string{
+		{},                              // Empty patterns (valid)
+		{"user:*"},                      // Single pattern
+		{"user:*", "session:*"},         // Multiple patterns
+		{"cache:data:*", "temp_*"},      // Mixed patterns
+		{"*:profile", "admin:*:config"}, // Complex patterns
+	}
+
+	for i, patterns := range validPatterns {
+		t.Run(fmt.Sprintf("valid_patterns_%d", i), func(t *testing.T) {
+			err := validateCollectionPatterns(patterns)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateCollectionPatterns_InvalidPatterns(t *testing.T) {
+	testCases := []struct {
+		name     string
+		patterns []string
+		wantErr  string
+	}{
+		{
+			name:     "empty_pattern",
+			patterns: []string{""},
+			wantErr:  "collection pattern 1 cannot be empty",
+		},
+		{
+			name:     "invalid_double_star",
+			patterns: []string{"user:**"},
+			wantErr:  "collection pattern 1 contains invalid '**' sequence",
+		},
+		{
+			name:     "invalid_bracket_pattern",
+			patterns: []string{"user:["},
+			wantErr:  "collection pattern 1 is invalid",
+		},
+		{
+			name:     "multiple_with_one_invalid",
+			patterns: []string{"user:*", ""},
+			wantErr:  "collection pattern 2 cannot be empty",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCollectionPatterns(tc.patterns)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+func TestValidateConfig_WithCollectionPatterns(t *testing.T) {
+	config := createValidConfig()
+	config.Migration.CollectionPatterns = []string{"user:*", "session:*"}
+
+	err := ValidateConfig(config)
+	assert.NoError(t, err)
+}
+
+func TestValidateConfig_WithInvalidCollectionPatterns(t *testing.T) {
+	config := createValidConfig()
+	config.Migration.CollectionPatterns = []string{""}
+
+	err := ValidateConfig(config)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "collection pattern 1 cannot be empty")
+}
+
+func TestLoadConfigFromEnv_WithCollectionPatterns(t *testing.T) {
+	// Clear any existing environment variables
+	clearEnvVars()
+	defer clearEnvVars()
+
+	// Set collection patterns environment variable
+	os.Setenv("RVM_MIGRATION_COLLECTION_PATTERNS", "user:*,session:*,cache:*")
+
+	config, err := LoadConfigFromEnv()
+	require.NoError(t, err)
+
+	expected := []string{"user:*", "session:*", "cache:*"}
+	assert.Equal(t, expected, config.Migration.CollectionPatterns)
 }

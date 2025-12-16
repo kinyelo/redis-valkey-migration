@@ -271,3 +271,76 @@
 
 - [x] 16. Final checkpoint - Ensure timeout implementation works
   - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 17. Implement collection migration functionality
+  - [x] 17.1 Create KeyScanner interface and implementation
+    - Define KeyScanner interface with pattern matching methods
+    - Implement ScanAllKeys and ScanKeysByPatterns methods
+    - Add MatchesPatterns method for glob-style pattern matching
+    - _Requirements: 9.1, 9.3_
+
+  - [x] 17.2 Write property test for pattern matching accuracy
+    - **Property 16: Pattern Matching Accuracy**
+    - **Validates: Requirements 9.1**
+
+  - [x] 17.3 Update DatabaseClient interface for pattern-based scanning
+    - Add GetKeysByPattern method to DatabaseClient interface
+    - Implement pattern-based key retrieval in RedisClient and ValkeyClient
+    - Update existing scanning logic to support pattern filtering
+    - _Requirements: 9.1, 9.3_
+
+  - [x] 17.4 Write property test for multiple pattern collection
+    - **Property 17: Multiple Pattern Collection**
+    - **Validates: Requirements 9.2**
+
+  - [x] 17.5 Write property test for filtered key scanning
+    - **Property 18: Filtered Key Scanning**
+    - **Validates: Requirements 9.3**
+
+  - [x] 17.6 Update configuration system for collection patterns
+    - Add CollectionPatterns field to MigrationConfig struct
+    - Add CLI flags for specifying collection patterns (--pattern, --collections)
+    - Update configuration validation to handle pattern syntax
+    - _Requirements: 9.1, 9.2_
+
+  - [x] 17.7 Update MigrationEngine to support collection filtering
+    - Integrate KeyScanner into MigrationEngine
+    - Modify migration workflow to use pattern-based scanning when patterns are specified
+    - Update key discovery logic to respect collection patterns
+    - _Requirements: 9.2, 9.3_
+
+  - [x] 17.8 Update progress monitoring for filtered migrations
+    - Modify ProgressMonitor to track filtered key set statistics
+    - Update progress reporting to show collection-specific counts
+    - Ensure progress percentages are based on filtered key set, not entire database
+    - _Requirements: 9.5_
+
+  - [x] 17.9 Write property test for filtered progress reporting
+    - **Property 19: Filtered Progress Reporting**
+    - **Validates: Requirements 9.5**
+
+  - [x] 17.10 Write unit tests for collection migration
+    - Test pattern matching with various glob patterns
+    - Test multiple pattern handling and key collection
+    - Test empty result handling when no keys match patterns
+    - Test progress reporting accuracy with filtered key sets
+    - _Requirements: 9.1, 9.2, 9.4, 9.5_
+
+  - [x] 17.11 Update CLI help and documentation for collection features
+    - Add help text and examples for collection pattern usage
+    - Update usage documentation with pattern syntax examples
+    - Add error messages for invalid pattern syntax
+    - _Requirements: 9.1, 9.2_
+
+- [x] 18. Checkpoint - Ensure collection migration works
+  - Ensure all tests pass, ask the user if questions arise.
+  - ✅ **COMPLETED**: All tests are passing successfully
+    - Unit tests: All passing
+    - Property-based tests: All passing (100 tests each for pattern matching, multiple patterns, filtered scanning, and filtered progress reporting)
+    - Integration tests: All passing
+    - E2E tests: All passing
+    - Collection migration functionality verified working correctly:
+      - Pattern-based key filtering
+      - Multiple pattern support
+      - Filtered progress reporting
+      - All data types (strings, hashes, lists, sets, sorted sets) migrating correctly

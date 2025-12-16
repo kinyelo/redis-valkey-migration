@@ -201,6 +201,20 @@ func (rc *RecoverableClient) GetAllKeys() ([]string, error) {
 	return result, err
 }
 
+// GetKeysByPattern retrieves keys matching a pattern with retry logic
+func (rc *RecoverableClient) GetKeysByPattern(pattern string) ([]string, error) {
+	var result []string
+	err := rc.recovery.WithRetry(fmt.Sprintf("%s get keys by pattern", rc.name), func() error {
+		keys, err := rc.client.GetKeysByPattern(pattern)
+		if err != nil {
+			return err
+		}
+		result = keys
+		return nil
+	})
+	return result, err
+}
+
 // GetKeyType gets key type with retry logic
 func (rc *RecoverableClient) GetKeyType(key string) (string, error) {
 	var result string

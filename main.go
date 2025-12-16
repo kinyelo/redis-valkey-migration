@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/kinyelo/redis-valkey-migration/internal/client"
@@ -40,8 +41,14 @@ data integrity verification and comprehensive error handling.`,
   # Migration with authentication
   redis-valkey-migration migrate --redis-password secret123 --valkey-password secret456
 
+  # Migrate specific collections using patterns
+  redis-valkey-migration migrate --pattern "user:*" --pattern "session:*"
+
+  # Migrate only user data
+  redis-valkey-migration migrate --collections "user:*"
+
   # Dry run to see what would be migrated
-  redis-valkey-migration migrate --dry-run
+  redis-valkey-migration migrate --dry-run --pattern "production:*"
 
   # Migration with custom batch size and logging
   redis-valkey-migration migrate --batch-size 500 --log-level debug
@@ -57,15 +64,23 @@ var migrateCmd = &cobra.Command{
 
 This command will:
 1. Connect to both Redis and Valkey databases
-2. Discover all keys in the Redis database
+2. Discover keys in the Redis database (all keys or filtered by patterns)
 3. Transfer each key with its data and type information
 4. Verify data integrity after transfer
 5. Provide comprehensive progress reporting and logging
 
 The migration supports all Redis data types including strings, hashes, 
 lists, sets, and sorted sets. It includes automatic retry logic for 
-network errors and can resume interrupted migrations.`,
-	Example: `  # Basic migration
+network errors and can resume interrupted migrations.
+
+Collection Filtering:
+You can migrate specific collections of keys using glob-style patterns:
+- Use --pattern to specify one or more key patterns
+- Use --collections as an alias for --pattern
+- Patterns support wildcards: * matches any characters
+- Multiple patterns can be specified to migrate different collections
+- If no patterns are specified, all keys will be migrated`,
+	Example: `  # Basic migration (all keys)
   redis-valkey-migration migrate
 
   # Migration with custom connection settings
@@ -73,16 +88,29 @@ network errors and can resume interrupted migrations.`,
     --redis-host localhost --redis-port 6379 --redis-database 0 \
     --valkey-host localhost --valkey-port 6380 --valkey-database 0
 
+  # Migrate specific collections using patterns
+  redis-valkey-migration migrate --pattern "user:*" --pattern "session:*"
+
+  # Migrate user data only
+  redis-valkey-migration migrate --collections "user:*"
+
+  # Migrate multiple collections with complex patterns
+  redis-valkey-migration migrate \
+    --pattern "user:*:profile" \
+    --pattern "cache:data:*" \
+    --pattern "temp_*"
+
   # Migration with authentication and custom settings
   redis-valkey-migration migrate \
     --redis-password myredispass \
     --valkey-password myvalkeypass \
     --batch-size 1000 \
     --max-concurrency 5 \
-    --log-level debug
+    --log-level debug \
+    --pattern "production:*"
 
-  # Dry run to preview migration
-  redis-valkey-migration migrate --dry-run
+  # Dry run to preview migration with patterns
+  redis-valkey-migration migrate --dry-run --pattern "user:*"
 
   # Resume interrupted migration
   redis-valkey-migration migrate --resume-file migration_state.json`,
@@ -254,6 +282,9 @@ func createEngineConfig(cmd *cobra.Command, cfg *config.Config) *engine.EngineCo
 	// Use batch size from migration config
 	engineConfig.BatchSize = cfg.Migration.BatchSize
 
+	// Use collection patterns from migration config
+	engineConfig.CollectionPatterns = cfg.Migration.CollectionPatterns
+
 	return engineConfig
 }
 
@@ -272,13 +303,33 @@ func runDryRun(cfg *config.Config, log logger.Logger) error {
 	}
 	defer redisClient.Disconnect()
 
-	// Discover keys
-	keys, err := redisClient.GetAllKeys()
-	if err != nil {
-		return fmt.Errorf("failed to discover keys: %w", err)
-	}
+	// Discover keys (with pattern filtering if specified)
+	var keys []string
+	if len(cfg.Migration.CollectionPatterns) > 0 {
+		log.Infof("Using collection patterns: %v", cfg.Migration.CollectionPatterns)
+		// For dry run, we'll simulate pattern filtering by getting all keys and filtering
+		allKeys, err := redisClient.GetAllKeys()
+		if err != nil {
+			return fmt.Errorf("failed to discover keys: %w", err)
+		}
 
-	log.Infof("Dry run completed: Found %d keys to migrate", len(keys))
+		// Simple pattern matching for dry run
+		for _, key := range allKeys {
+			for _, pattern := range cfg.Migration.CollectionPatterns {
+				if matched, _ := filepath.Match(pattern, key); matched {
+					keys = append(keys, key)
+					break
+				}
+			}
+		}
+		log.Infof("Dry run completed: Found %d keys matching patterns (out of %d total keys)", len(keys), len(allKeys))
+	} else {
+		keys, err = redisClient.GetAllKeys()
+		if err != nil {
+			return fmt.Errorf("failed to discover keys: %w", err)
+		}
+		log.Infof("Dry run completed: Found %d keys to migrate", len(keys))
+	}
 
 	// Show sample of keys and their types
 	sampleSize := 10

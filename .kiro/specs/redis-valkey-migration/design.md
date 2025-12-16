@@ -56,6 +56,7 @@ type MigrationConfig struct {
     RetryAttempts     int
     LogLevel          string
     TimeoutConfig     TimeoutConfig
+    CollectionPatterns []string
 }
 
 type TimeoutConfig struct {
@@ -79,6 +80,7 @@ type DatabaseClient interface {
     Connect() error
     Disconnect() error
     GetAllKeys() ([]string, error)
+    GetKeysByPattern(pattern string) ([]string, error)
     GetKeyType(key string) (string, error)
     GetValue(key string) (interface{}, error)
     SetValue(key string, value interface{}) error
@@ -96,6 +98,18 @@ type MigrationEngine struct {
     processor    DataProcessor
     monitor      ProgressMonitor
     logger       Logger
+    scanner      KeyScanner
+}
+```
+
+### Key Scanner
+Handles key discovery and filtering based on collection patterns.
+
+```go
+type KeyScanner interface {
+    ScanAllKeys(client DatabaseClient) ([]string, error)
+    ScanKeysByPatterns(client DatabaseClient, patterns []string) ([]string, error)
+    MatchesPatterns(key string, patterns []string) bool
 }
 ```
 
@@ -224,6 +238,22 @@ type KeyMetadata struct {
 *For any* data structure exceeding the large data threshold, the Migration Tool should automatically apply extended timeout values using the configured multiplier to prevent timeout errors
 **Validates: Requirements 8.4**
 
+### Property 16: Pattern Matching Accuracy
+*For any* set of keys and glob-style patterns, the Migration Tool should correctly identify all keys that match any of the specified patterns using standard glob matching rules
+**Validates: Requirements 9.1**
+
+### Property 17: Multiple Pattern Collection
+*For any* set of multiple collection patterns, the Migration Tool should migrate all keys that match any of the specified patterns, ensuring no matching keys are excluded
+**Validates: Requirements 9.2**
+
+### Property 18: Filtered Key Scanning
+*For any* specified collection patterns, the Migration Tool should scan and process only keys matching those patterns, not scanning the entire database key space
+**Validates: Requirements 9.3**
+
+### Property 19: Filtered Progress Reporting
+*For any* collection migration with specified patterns, the progress statistics and counts should reflect only the filtered key set size and processing, not the entire database metrics
+**Validates: Requirements 9.5**
+
 ## Error Handling
 
 The Migration Tool implements a comprehensive error handling strategy with multiple layers:
@@ -260,14 +290,17 @@ Unit tests will verify specific examples, edge cases, and integration points:
 - **Error Scenarios**: Test specific error conditions and recovery mechanisms
 - **Configuration Validation**: Test parameter validation with known valid/invalid inputs
 - **Logging Output**: Test log format and content with specific scenarios
+- **Pattern Matching**: Test glob pattern matching with known key sets and patterns
+- **Collection Migration**: Test targeted migration with specific pattern examples
 
 ### Property-Based Testing Approach
 Property-based tests will verify universal properties across all inputs using **Testify** and **go-fuzz** libraries:
 
 - **Minimum 100 iterations** per property test to ensure statistical confidence
-- **Smart generators** that create realistic Redis data structures and configurations
+- **Smart generators** that create realistic Redis data structures, configurations, and key patterns
 - **Invariant verification** that properties hold across all generated test cases
 - **Shrinking capabilities** to find minimal failing examples when properties are violated
+- **Pattern generators** that create diverse glob patterns and matching key sets for collection testing
 
 Each property-based test will be tagged with comments explicitly referencing the correctness property from this design document using the format: **Feature: redis-valkey-migration, Property {number}: {property_text}**
 

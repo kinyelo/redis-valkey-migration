@@ -42,6 +42,11 @@ func (m *MockDatabaseClient) GetAllKeys() ([]string, error) {
 	return args.Get(0).([]string), args.Error(1)
 }
 
+func (m *MockDatabaseClient) GetKeysByPattern(pattern string) ([]string, error) {
+	args := m.Called(pattern)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockDatabaseClient) GetKeyType(key string) (string, error) {
 	args := m.Called(key)
 	return args.String(0), args.Error(1)

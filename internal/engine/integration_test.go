@@ -270,6 +270,15 @@ func (m *IntegrationTestClient) GetAllKeys() ([]string, error) {
 	return keys, nil
 }
 
+func (m *IntegrationTestClient) GetKeysByPattern(pattern string) ([]string, error) {
+	if !m.connected {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	// Simple pattern matching for testing - just return all keys for now
+	return m.GetAllKeys()
+}
+
 func (m *IntegrationTestClient) GetKeyType(key string) (string, error) {
 	if !m.connected {
 		return "", fmt.Errorf("not connected")
